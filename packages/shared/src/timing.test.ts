@@ -32,11 +32,12 @@ describe('timing', () => {
     expect(targetMs).toBeGreaterThanOrEqual(TARGET_TIME.minMs);
     expect(targetMs).toBeLessThanOrEqual(TARGET_TIME.maxMs);
     expect(targetMs % 100).not.toBe(0);
+    expect(targetMs % 10).toBe(0);
   });
 
   it('retries when the random value produces a round target', () => {
-    const values = [0, 0.5001];
-    const targetMs = generateTargetMs(() => values.shift() ?? 0.5001);
+    const values = [0, 0.5009];
+    const targetMs = generateTargetMs(() => values.shift() ?? 0.5009);
 
     expect(targetMs).not.toBe(TARGET_TIME.minMs);
     expect(targetMs % 100).not.toBe(0);

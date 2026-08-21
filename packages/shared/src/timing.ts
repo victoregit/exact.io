@@ -27,11 +27,13 @@ export function classifyPrecision(differenceMs: number): PrecisionLabel {
 }
 
 export function generateTargetMs(random: () => number = Math.random): number {
-  const range = TARGET_TIME.maxMs - TARGET_TIME.minMs + 1;
+  const minCentiseconds = TARGET_TIME.minMs / 10;
+  const maxCentiseconds = TARGET_TIME.maxMs / 10;
+  const range = maxCentiseconds - minCentiseconds + 1;
   let targetMs: number;
 
   do {
-    targetMs = TARGET_TIME.minMs + Math.floor(random() * range);
+    targetMs = (minCentiseconds + Math.floor(random() * range)) * 10;
   } while (targetMs % 100 === 0);
 
   return targetMs;

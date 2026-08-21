@@ -33,6 +33,10 @@ function formatSeconds(milliseconds: number): string {
   return `${(milliseconds / 1_000).toFixed(3)}s`;
 }
 
+function formatTarget(milliseconds: number): string {
+  return `${(milliseconds / 1_000).toFixed(2)}s`;
+}
+
 export default function HomePage() {
   const [gameState, setGameState] = useState<GameState>('idle');
   const [targetMs, setTargetMs] = useState(0);
@@ -151,7 +155,7 @@ export default function HomePage() {
                 SEU ALVO
               </p>
               <p className="mt-5 font-mono text-6xl font-black tracking-tight text-white sm:text-8xl">
-                {formatSeconds(targetMs)}
+                {formatTarget(targetMs)}
               </p>
               <p className="mt-8 text-sm text-zinc-500">Memorize este tempo</p>
             </div>
@@ -215,7 +219,7 @@ export default function HomePage() {
                 {result.precision}
               </p>
               <div className="mt-10 grid grid-cols-2 gap-3">
-                <ResultMetric label="ALVO" value={formatSeconds(targetMs)} />
+                <ResultMetric label="ALVO" value={formatTarget(targetMs)} />
                 <ResultMetric
                   label="VOCÊ"
                   value={formatSeconds(result.actualMs)}

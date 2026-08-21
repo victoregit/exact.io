@@ -75,4 +75,4 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 
 ## Status atual
 
-A Fase 1 está implementada: rodada Solo completa com alvo aleatório entre 3 e 15 segundos, contagem regressiva, tempo oculto, controles por toque/clique/teclado, prevenção de parada duplicada e feedback de precisão. Pontuação e sessões de cinco rodadas não foram antecipadas.
+A Fase 1 está implementada: rodada Solo completa com alvo aleatório em centésimos entre 3 e 15 segundos, contagem regressiva, tempo oculto, controles por toque/clique/teclado, prevenção de parada duplicada e feedback de precisão em milissegundos. Pontuação e sessões de cinco rodadas não foram antecipadas.
