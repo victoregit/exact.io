@@ -6,10 +6,12 @@ import {
   calculateScore,
   classifyPrecision,
   generateTargetMs,
+  summarizeSession,
 } from '@exact-io/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-type GameState = 'idle' | 'target' | 'countdown' | 'playing' | 'result';
+type GameState =
+  'idle' | 'target' | 'countdown' | 'playing' | 'result' | 'summary';
 
 interface RoundResult {
   actualMs: number;
@@ -17,10 +19,12 @@ interface RoundResult {
   precision: PrecisionLabel;
   score: number;
   signedDifferenceMs: number;
+  targetMs: number;
 }
 
 const COUNTDOWN_FROM = 3;
 const TARGET_PREVIEW_MS = 2_500;
+const TOTAL_ROUNDS = 5;
 
 const precisionStyles: Record<PrecisionLabel, string> = {
   PERFECT: 'text-emerald-300 drop-shadow-[0_0_24px_rgba(52,211,153,0.85)]',
@@ -45,6 +49,7 @@ export default function HomePage() {
   const [targetMs, setTargetMs] = useState(0);
   const [countdown, setCountdown] = useState(COUNTDOWN_FROM);
   const [result, setResult] = useState<RoundResult | null>(null);
+  const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const startedAtRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
 
@@ -57,6 +62,11 @@ export default function HomePage() {
     setGameState('target');
   }, []);
 
+  const beginSession = useCallback(() => {
+    setRoundResults([]);
+    beginRound();
+  }, [beginRound]);
+
   const stopRound = useCallback(() => {
     if (stoppedRef.current || startedAtRef.current === null) return;
 
@@ -65,15 +75,28 @@ export default function HomePage() {
     const signedDifferenceMs = actualMs - targetMs;
     const differenceMs = calculateDifference(targetMs, actualMs);
 
-    setResult({
+    const roundResult: RoundResult = {
       actualMs,
       differenceMs,
       precision: classifyPrecision(differenceMs),
       score: calculateScore(differenceMs),
       signedDifferenceMs,
-    });
+      targetMs,
+    };
+
+    setResult(roundResult);
+    setRoundResults((results) => [...results, roundResult]);
     setGameState('result');
   }, [targetMs]);
+
+  const continueSession = useCallback(() => {
+    if (roundResults.length >= TOTAL_ROUNDS) {
+      setGameState('summary');
+      return;
+    }
+
+    beginRound();
+  }, [beginRound, roundResults.length]);
 
   useEffect(() => {
     if (gameState !== 'target') return;
@@ -111,6 +134,15 @@ export default function HomePage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameState, stopRound]);
 
+  const completedRounds = roundResults.length;
+  const currentRound =
+    gameState === 'result'
+      ? completedRounds
+      : Math.min(completedRounds + 1, TOTAL_ROUNDS);
+  const summary = summarizeSession(roundResults);
+  const bestRound = roundResults[summary.bestRoundIndex];
+  const worstRound = roundResults[summary.worstRoundIndex];
+
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-5 py-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(16,185,129,0.09),transparent_42%)]" />
@@ -126,7 +158,9 @@ export default function HomePage() {
             </p>
           </div>
           <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold tracking-widest text-zinc-500">
-            ROUND 1
+            {gameState === 'summary'
+              ? 'FINAL'
+              : `RODADA ${currentRound}/${TOTAL_ROUNDS}`}
           </span>
         </header>
 
@@ -145,7 +179,7 @@ export default function HomePage() {
               </p>
               <button
                 className="mt-12 w-full max-w-sm cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-lg font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98]"
-                onClick={beginRound}
+                onClick={beginSession}
                 type="button"
               >
                 INICIAR
@@ -248,10 +282,77 @@ export default function HomePage() {
               </p>
               <button
                 className="mt-10 w-full cursor-pointer rounded-2xl bg-white px-8 py-5 text-sm font-black tracking-[0.2em] text-zinc-950 transition hover:bg-zinc-200 active:scale-[0.98]"
-                onClick={beginRound}
+                onClick={continueSession}
                 type="button"
               >
-                JOGAR NOVAMENTE
+                {completedRounds >= TOTAL_ROUNDS
+                  ? 'VER RESULTADO'
+                  : 'PRÓXIMA RODADA'}
+              </button>
+            </div>
+          )}
+
+          {gameState === 'summary' && bestRound && worstRound && (
+            <div className="w-full" aria-live="polite">
+              <p className="text-xs font-bold tracking-[0.38em] text-emerald-400">
+                PARTIDA CONCLUÍDA
+              </p>
+              <p className="mt-4 font-mono text-6xl font-black tracking-tight text-white sm:text-7xl">
+                {summary.totalScore.toLocaleString('pt-BR')}
+              </p>
+              <p className="mt-2 text-[10px] tracking-[0.3em] text-zinc-600">
+                DE 5.000 PONTOS
+              </p>
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <ResultMetric
+                  label="ERRO MÉDIO"
+                  value={formatSeconds(summary.averageDifferenceMs)}
+                />
+                <ResultMetric
+                  label="PERFECTS"
+                  value={String(summary.perfects)}
+                />
+                <ResultMetric
+                  label="MELHOR"
+                  value={formatSeconds(bestRound.differenceMs)}
+                />
+                <ResultMetric
+                  label="PIOR"
+                  value={formatSeconds(worstRound.differenceMs)}
+                />
+              </div>
+
+              <div className="mt-5 space-y-2">
+                {roundResults.map((round, index) => (
+                  <div
+                    className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3"
+                    key={`${round.targetMs}-${index}`}
+                  >
+                    <span className="text-[10px] font-bold tracking-widest text-zinc-600">
+                      R{index + 1}
+                    </span>
+                    <span
+                      className={`text-xs font-bold ${precisionStyles[round.precision]}`}
+                    >
+                      {round.precision}
+                    </span>
+                    <span className="font-mono text-sm text-zinc-400">
+                      {formatSeconds(round.differenceMs)}
+                    </span>
+                    <span className="w-12 text-right font-mono text-sm font-bold text-zinc-200">
+                      {round.score}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                className="mt-8 w-full cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-sm font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98]"
+                onClick={beginSession}
+                type="button"
+              >
+                NOVA PARTIDA
               </button>
             </div>
           )}

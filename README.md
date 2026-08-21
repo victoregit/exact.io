@@ -69,10 +69,10 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 - [x] Fase 0 — Fundação do projeto
 - [x] Fase 1 — Protótipo Solo
 - [x] Fase 2 — Sistema de pontuação
-- [ ] Fase 3 — Sessão Solo de cinco rodadas
+- [x] Fase 3 — Sessão Solo de cinco rodadas
 - [ ] Polimento Solo — UX, mobile, áudio e acessibilidade
 - [ ] Futuro — Multiplayer, competição e demais modos
 
 ## Status atual
 
-A Fase 2 está implementada: cada rodada Solo concede de 0 a 1.000 pontos por uma curva gradual baseada na diferença em milissegundos. A interface também mantém a classificação de precisão e os resultados em centésimos. Sessões de cinco rodadas ainda não foram antecipadas.
+A Fase 3 está implementada: cada partida Solo possui cinco rodadas, pontuação acumulada de até 5.000 pontos e resumo final com erro médio, melhor rodada, pior rodada, Perfects e desempenho individual das cinco tentativas.
