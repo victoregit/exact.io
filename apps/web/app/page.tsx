@@ -3,6 +3,7 @@
 import {
   type PrecisionLabel,
   calculateDifference,
+  calculateScore,
   classifyPrecision,
   generateTargetMs,
 } from '@exact-io/shared';
@@ -14,6 +15,7 @@ interface RoundResult {
   actualMs: number;
   differenceMs: number;
   precision: PrecisionLabel;
+  score: number;
   signedDifferenceMs: number;
 }
 
@@ -67,6 +69,7 @@ export default function HomePage() {
       actualMs,
       differenceMs,
       precision: classifyPrecision(differenceMs),
+      score: calculateScore(differenceMs),
       signedDifferenceMs,
     });
     setGameState('result');
@@ -219,7 +222,20 @@ export default function HomePage() {
               >
                 {result.precision}
               </p>
-              <div className="mt-10 grid grid-cols-2 gap-3">
+
+              <div className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-5 py-5">
+                <p className="text-[10px] font-bold tracking-[0.3em] text-emerald-500/70">
+                  PONTUAÇÃO
+                </p>
+                <p className="mt-2 font-mono text-4xl font-black tracking-tight text-emerald-300">
+                  {result.score.toLocaleString('pt-BR')}
+                </p>
+                <p className="mt-1 text-[10px] tracking-widest text-zinc-600">
+                  DE 10.000 PONTOS
+                </p>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
                 <ResultMetric label="ALVO" value={formatTarget(targetMs)} />
                 <ResultMetric
                   label="VOCÊ"
