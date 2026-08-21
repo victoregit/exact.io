@@ -231,7 +231,7 @@ export default function HomePage() {
                   {result.score.toLocaleString('pt-BR')}
                 </p>
                 <p className="mt-1 text-[10px] tracking-widest text-zinc-600">
-                  DE 10.000 PONTOS
+                  DE 1.000 PONTOS
                 </p>
               </div>
 

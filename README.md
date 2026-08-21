@@ -75,4 +75,4 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 
 ## Status atual
 
-A Fase 2 está implementada: cada rodada Solo concede de 0 a 10.000 pontos por uma curva gradual baseada na diferença em milissegundos. A interface também mantém a classificação de precisão e os resultados em centésimos. Sessões de cinco rodadas ainda não foram antecipadas.
+A Fase 2 está implementada: cada rodada Solo concede de 0 a 1.000 pontos por uma curva gradual baseada na diferença em milissegundos. A interface também mantém a classificação de precisão e os resultados em centésimos. Sessões de cinco rodadas ainda não foram antecipadas.

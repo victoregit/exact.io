@@ -11,13 +11,13 @@ describe('calculateScore', () => {
   );
 
   it('interpolates gradually between curve anchors', () => {
-    expect(calculateScore(30)).toBe(8_750);
-    expect(calculateScore(175)).toBe(4_500);
-    expect(calculateScore(750)).toBe(550);
+    expect(calculateScore(30)).toBe(875);
+    expect(calculateScore(175)).toBe(450);
+    expect(calculateScore(750)).toBe(55);
   });
 
-  it('stays between zero and ten thousand', () => {
-    expect(calculateScore(-10)).toBe(10_000);
+  it('stays between zero and one thousand', () => {
+    expect(calculateScore(-10)).toBe(1_000);
     expect(calculateScore(5_000)).toBe(0);
   });
 

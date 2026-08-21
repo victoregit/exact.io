@@ -1,11 +1,11 @@
 export const SCORE_CURVE = [
-  { differenceMs: 0, score: 10_000 },
-  { differenceMs: 10, score: 9_500 },
-  { differenceMs: 50, score: 8_000 },
-  { differenceMs: 100, score: 6_000 },
-  { differenceMs: 250, score: 3_000 },
-  { differenceMs: 500, score: 1_000 },
-  { differenceMs: 1_000, score: 100 },
+  { differenceMs: 0, score: 1_000 },
+  { differenceMs: 10, score: 950 },
+  { differenceMs: 50, score: 800 },
+  { differenceMs: 100, score: 600 },
+  { differenceMs: 250, score: 300 },
+  { differenceMs: 500, score: 100 },
+  { differenceMs: 1_000, score: 10 },
   { differenceMs: 2_000, score: 0 },
 ] as const;
 
