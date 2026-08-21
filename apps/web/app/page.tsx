@@ -30,11 +30,12 @@ const precisionStyles: Record<PrecisionLabel, string> = {
 };
 
 function formatSeconds(milliseconds: number): string {
-  return `${(milliseconds / 1_000).toFixed(3)}s`;
+  const truncatedSeconds = Math.trunc(milliseconds / 10) / 100;
+  return `${truncatedSeconds.toFixed(2)}s`;
 }
 
 function formatTarget(milliseconds: number): string {
-  return `${(milliseconds / 1_000).toFixed(2)}s`;
+  return formatSeconds(milliseconds);
 }
 
 export default function HomePage() {
