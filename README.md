@@ -4,7 +4,7 @@ Jogo web de precisão temporal. O jogador conhece um tempo-alvo, inicia a rodada
 
 ## Mecânica
 
-Uma rodada apresenta o alvo, executa uma contagem regressiva e oculta todas as referências temporais. O resultado compara o tempo estimado pelo jogador ao alvo usando o erro absoluto. A mecânica Solo será implementada na próxima fase.
+Uma rodada apresenta o alvo, executa uma contagem regressiva e oculta todas as referências temporais. O jogador para por toque, clique ou tecla `SPACE`; o resultado compara o tempo medido com `performance.now()` ao alvo usando o erro absoluto.
 
 ## Stack
 
@@ -14,7 +14,7 @@ Uma rodada apresenta o alvo, executa uma contagem regressiva e oculta todas as r
 - Vitest para testes automatizados
 - ESLint e Prettier para qualidade de código
 
-PostgreSQL, Prisma e Socket.IO serão adicionados somente quando as fases correspondentes do roadmap exigirem.
+O foco atual é exclusivamente single-player. PostgreSQL, Prisma, Socket.IO, multiplayer e sistemas competitivos permanecem fora do escopo até a experiência Solo estar sólida.
 
 ## Arquitetura
 
@@ -67,11 +67,12 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 ## Roadmap
 
 - [x] Fase 0 — Fundação do projeto
-- [ ] Fase 1 — Protótipo Solo
+- [x] Fase 1 — Protótipo Solo
 - [ ] Fase 2 — Sistema de pontuação
 - [ ] Fase 3 — Sessão Solo de cinco rodadas
-- [ ] Fases 4–20 — Multiplayer, competição e evolução do produto
+- [ ] Polimento Solo — UX, mobile, áudio e acessibilidade
+- [ ] Futuro — Multiplayer, competição e demais modos
 
 ## Status atual
 
-A Fase 0 está implementada: monorepo, frontend, backend, configurações de qualidade, comandos unificados e health check testado. Nenhuma funcionalidade de gameplay ou persistência foi antecipada.
+A Fase 1 está implementada: rodada Solo completa com alvo aleatório entre 3 e 15 segundos, contagem regressiva, tempo oculto, controles por toque/clique/teclado, prevenção de parada duplicada e feedback de precisão. Pontuação e sessões de cinco rodadas não foram antecipadas.
