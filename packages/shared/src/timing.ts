@@ -1,4 +1,4 @@
-export const TARGET_TIME = { minMs: 3_000, maxMs: 15_000 } as const;
+export const TARGET_TIME = { minMs: 3_000, maxMs: 10_000 } as const;
 
 export const PRECISION_THRESHOLDS = [
   { maxDifferenceMs: 10, label: 'PERFECT' },
