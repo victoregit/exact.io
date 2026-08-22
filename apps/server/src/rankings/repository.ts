@@ -1,5 +1,7 @@
 import pg from 'pg';
 
+import { createPostgresPoolConfig } from '../postgres.js';
+
 export type RankingPeriod = 'daily' | 'monthly' | 'weekly';
 
 export interface DailyBestInput {
@@ -35,7 +37,10 @@ export function createPostgresRankingsRepository(
   connectionString = process.env.DATABASE_URL,
 ): RankingsRepository | null {
   if (!connectionString) return null;
-  const pool = new pg.Pool({ connectionString, max: 10 });
+  const pool = new pg.Pool({
+    ...createPostgresPoolConfig(connectionString),
+    max: 10,
+  });
   const views: Record<RankingPeriod, string> = {
     daily: 'ranking_daily',
     monthly: 'ranking_monthly',

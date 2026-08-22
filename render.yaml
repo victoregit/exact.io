@@ -19,6 +19,8 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: DATABASE_CA_CERT
+        sync: false
       - key: DEVICE_KEY_SECRET
         generateValue: true
 

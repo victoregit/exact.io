@@ -11,6 +11,7 @@
 1. Conectar o repositório e criar um Blueprint usando `render.yaml`.
 2. Informar os valores solicitados:
    - `DATABASE_URL`: Service URI do PostgreSQL da Aiven.
+   - `DATABASE_CA_CERT`: certificado CA exibido na conexão do serviço Aiven.
    - `WEB_ORIGIN`: URL pública do `exact-web`, sem barra final.
    - `NEXT_PUBLIC_API_URL`: URL pública do `exact-api`, sem barra final.
 3. O Render gera `DEVICE_KEY_SECRET` automaticamente.
