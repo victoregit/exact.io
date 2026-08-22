@@ -19,6 +19,7 @@ interface InternalPlayer extends RoomPlayer {
 }
 
 interface InternalMatch extends RoomMatchSnapshot {
+  accumulatedMs: number;
   turnStartedAtMs: number | null;
 }
 
@@ -44,6 +45,7 @@ export class RoomManager {
     private readonly createCode: () => string = generateRoomCode,
     private readonly createTarget: () => number = generateTargetMs,
     private readonly now: () => number = Date.now,
+    private readonly random: () => number = Math.random,
   ) {}
 
   create(payload: CreateRoomPayload, socketId: string) {
@@ -242,17 +244,25 @@ export class RoomManager {
       );
     }
 
-    const firstPlayer = [...room.players].sort(
+    if (room.mode === 'elimination') this.shuffleActiveTurnOrder(room);
+    const firstPlayer = room.players
+      .filter((candidate) => !candidate.isEliminated)
+      .sort(
       (left, right) => left.turnOrder - right.turnOrder,
-    )[0];
+      )[0];
     room.match = {
       activePlayerId: firstPlayer.id,
+      accumulatedMs: 0,
       attempts: [],
+      challengedByIds: [],
       championId: null,
-      countdownEndsAt: null,
+      countdownEndsAt: room.mode === 'points' ? this.now() + 3_000 : null,
       currentRound: 1,
       isTiebreak: false,
-      phase: 'ready',
+      loserId: null,
+      phase: room.mode === 'points' ? 'countdown' : 'ready',
+      previousPlayerId: null,
+      resolution: null,
       targetMs: this.createTarget(),
       totalRounds: room.rounds,
       turnStartedAtMs: null,
@@ -312,14 +322,30 @@ export class RoomManager {
     if (!match || match.phase !== 'timing' || match.turnStartedAtMs === null) {
       throw new RoomError('TURN_NOT_RUNNING', 'O cronômetro não está rodando.');
     }
+    if (room.mode === 'points') {
+      if (match.attempts.some((attempt) => attempt.playerId === player.id)) {
+        throw new RoomError(
+          'TURN_ALREADY_FINISHED',
+          'Você já jogou nesta rodada.',
+        );
+      }
+      match.attempts.push({
+        elapsedMs: Math.min(
+          Math.max(0, this.now() - match.turnStartedAtMs),
+          match.targetMs * 2,
+        ),
+        playerId: player.id,
+      });
+      if (match.attempts.length === room.players.length) {
+        this.resolvePrecisionRound(room);
+      }
+      return toSnapshot(room);
+    }
     if (match.activePlayerId !== player.id) {
       throw new RoomError('NOT_YOUR_TURN', 'Aguarde a sua vez.');
     }
 
-    const elapsedMs = Math.min(
-      Math.max(0, this.now() - match.turnStartedAtMs),
-      match.targetMs * 2,
-    );
+    const elapsedMs = Math.max(0, this.now() - match.turnStartedAtMs);
     this.completeTurn(room, player.id, elapsedMs);
     return toSnapshot(room);
   }
@@ -336,7 +362,75 @@ export class RoomManager {
     ) {
       throw new RoomError('TURN_NOT_RUNNING', 'O cronômetro não está rodando.');
     }
-    this.completeTurn(room, playerId, match.targetMs * 2);
+    if (room.mode === 'points') {
+      room.players
+        .filter(
+          (candidate) =>
+            !match.attempts.some(
+              (attempt) => attempt.playerId === candidate.id,
+            ),
+        )
+        .forEach((candidate) => {
+          match.attempts.push({
+            elapsedMs: match.targetMs * 2,
+            playerId: candidate.id,
+          });
+        });
+      this.resolvePrecisionRound(room);
+      return toSnapshot(room);
+    }
+    this.completeTurn(
+      room,
+      playerId,
+      Math.max(0, match.targetMs * 2 - match.accumulatedMs),
+    );
+    return toSnapshot(room);
+  }
+
+  getRemainingLimitMs(code: string): number {
+    const room = this.rooms.get(code);
+    const match = room?.match;
+    if (!room || !match) return 0;
+    return Math.max(0, match.targetMs * 2 - match.accumulatedMs);
+  }
+
+  challenge(socketId: string): RoomSnapshot {
+    const { player, room } = this.getActiveTurn(socketId);
+    const match = room.match;
+    if (!match || room.mode === 'points' || match.previousPlayerId === null) {
+      throw new RoomError('CHALLENGE_UNAVAILABLE', 'Não há jogador para desafiar.');
+    }
+    if (match.phase === 'result' || match.phase === 'verification') {
+      throw new RoomError('CHALLENGE_UNAVAILABLE', 'A rodada já terminou.');
+    }
+    if (player.id === match.previousPlayerId) {
+      throw new RoomError('INVALID_CHALLENGE', 'Você não pode desafiar a si mesmo.');
+    }
+    if (match.challengedByIds.includes(player.id)) {
+      throw new RoomError('CHALLENGE_ALREADY_USED', 'Você já desafiou nesta rodada.');
+    }
+
+    match.challengedByIds.push(player.id);
+    const previousAttempt = [...match.attempts]
+      .reverse()
+      .find((attempt) => attempt.playerId === match.previousPlayerId);
+    const correct =
+      room.mode === 'elimination'
+        ? match.accumulatedMs >= match.targetMs
+        : (previousAttempt?.elapsedMs ?? 0) >= match.targetMs;
+    const winnerId = correct ? player.id : match.previousPlayerId;
+    const loserId = correct ? match.previousPlayerId : player.id;
+    if (room.mode === 'duos') {
+      const winner = room.players.find((candidate) => candidate.id === winnerId);
+      if (winner) winner.score += 1;
+      return toSnapshot(room);
+    }
+    this.resolveHotPotatoRound(
+      room,
+      winnerId,
+      loserId,
+      correct ? 'challenge-correct' : 'challenge-wrong',
+    );
     return toSnapshot(room);
   }
 
@@ -347,9 +441,47 @@ export class RoomManager {
   ): void {
     const match = room.match;
     if (!match) return;
+    if (room.mode === 'elimination') {
+      match.accumulatedMs = Math.min(
+        match.targetMs * 2,
+        match.accumulatedMs + elapsedMs,
+      );
+      match.attempts.push({ elapsedMs: match.accumulatedMs, playerId });
+      match.countdownEndsAt = null;
+      match.turnStartedAtMs = null;
+      match.previousPlayerId = playerId;
+
+      if (match.accumulatedMs >= match.targetMs * 2) {
+        const closest = [...match.attempts].sort(
+          (left, right) =>
+            Math.abs(left.elapsedMs - match.targetMs) -
+            Math.abs(right.elapsedMs - match.targetMs),
+        )[0];
+        this.resolveHotPotatoRound(
+          room,
+          closest?.playerId ?? playerId,
+          playerId,
+          'limit',
+        );
+        return;
+      }
+
+      const activePlayers = room.players
+        .filter((candidate) => !candidate.isEliminated)
+        .sort((left, right) => left.turnOrder - right.turnOrder);
+      const currentIndex = activePlayers.findIndex(
+        (candidate) => candidate.id === playerId,
+      );
+      const nextPlayer = activePlayers[(currentIndex + 1) % activePlayers.length];
+      match.activePlayerId = nextPlayer.id;
+      match.phase = 'countdown';
+      match.countdownEndsAt = this.now() + 3_000;
+      return;
+    }
     match.attempts.push({ elapsedMs, playerId });
     match.countdownEndsAt = null;
     match.turnStartedAtMs = null;
+    match.previousPlayerId = playerId;
 
     const nextPlayer = [...room.players]
       .sort((left, right) => left.turnOrder - right.turnOrder)
@@ -361,7 +493,96 @@ export class RoomManager {
       match.activePlayerId = nextPlayer.id;
       match.phase = 'ready';
     } else {
-      match.phase = 'verification';
+      this.resolvePrecisionRound(room);
+    }
+  }
+
+  private resolvePrecisionRound(room: InternalRoom): void {
+    const match = room.match;
+    if (!match) return;
+    const bestDifference = Math.min(
+      ...match.attempts.map((attempt) =>
+        Math.abs(attempt.elapsedMs - match.targetMs),
+      ),
+    );
+    match.winnerIds = [
+      ...new Set(
+        match.attempts
+          .filter(
+            (attempt) =>
+              Math.abs(attempt.elapsedMs - match.targetMs) === bestDifference,
+          )
+          .map((attempt) => attempt.playerId),
+      ),
+    ];
+    match.winnerIds.forEach((winnerId) => {
+      const winner = room.players.find((candidate) => candidate.id === winnerId);
+      if (winner) winner.score += 1;
+    });
+    match.countdownEndsAt = null;
+    match.turnStartedAtMs = null;
+    match.resolution = 'closest';
+    match.phase = 'result';
+    room.status = 'results';
+    this.finishPointsChampionship(room);
+  }
+
+  private resolveHotPotatoRound(
+    room: InternalRoom,
+    winnerId: string,
+    loserId: string,
+    resolution: NonNullable<RoomMatchSnapshot['resolution']>,
+  ): void {
+    const match = room.match;
+    if (!match) return;
+    match.countdownEndsAt = null;
+    match.turnStartedAtMs = null;
+    match.winnerIds = [winnerId];
+    match.loserId = loserId;
+    match.resolution = resolution;
+    match.phase = 'result';
+    room.status = 'results';
+
+    if (room.mode === 'points') {
+      const winner = room.players.find((candidate) => candidate.id === winnerId);
+      if (winner) winner.score += 1;
+      this.finishPointsChampionship(room);
+      return;
+    }
+
+    const loser = room.players.find((candidate) => candidate.id === loserId);
+    if (loser?.shieldActive) loser.shieldActive = false;
+    else if (loser) loser.isEliminated = true;
+    const survivors = room.players.filter((candidate) => !candidate.isEliminated);
+    if (survivors.length === 1) {
+      match.championId = survivors[0].id;
+      room.status = 'finished';
+    }
+  }
+
+  private finishPointsChampionship(room: InternalRoom): void {
+    const match = room.match;
+    if (!match || match.currentRound < match.totalRounds) return;
+    const standings =
+      room.mode === 'duos'
+        ? (['AB', 'CD'] as const).map((team) => ({
+            contestantId: team,
+            score: room.players
+              .filter((candidate) => candidate.team === team)
+              .reduce((total, candidate) => total + candidate.score, 0),
+          }))
+        : room.players.map((candidate) => ({
+            contestantId: candidate.id,
+            score: candidate.score,
+          }));
+    const championship = resolveChampionship(
+      standings,
+      match.currentRound,
+      match.totalRounds,
+    );
+    if (championship.status === 'finished') {
+      match.championId = championship.championId;
+      room.status = 'finished';
     }
   }
 
@@ -453,12 +674,17 @@ export class RoomManager {
     )[0];
     room.match = {
       activePlayerId: firstPlayer.id,
+      accumulatedMs: 0,
       attempts: [],
+      challengedByIds: [],
       championId: null,
-      countdownEndsAt: null,
+      countdownEndsAt: room.mode === 'points' ? this.now() + 3_000 : null,
       currentRound: room.match.currentRound + 1,
       isTiebreak: room.match.currentRound >= room.match.totalRounds,
-      phase: 'ready',
+      loserId: null,
+      phase: room.mode === 'points' ? 'countdown' : 'ready',
+      previousPlayerId: null,
+      resolution: null,
       targetMs: this.createTarget(),
       totalRounds: room.match.totalRounds,
       turnStartedAtMs: null,
@@ -509,6 +735,22 @@ export class RoomManager {
     if (this.roomBySocket.has(socketId)) {
       throw new RoomError('ALREADY_IN_ROOM', 'Você já está em uma sala.');
     }
+  }
+
+  private shuffleActiveTurnOrder(room: InternalRoom): void {
+    const activePlayers = room.players.filter(
+      (candidate) => !candidate.isEliminated,
+    );
+    for (let index = activePlayers.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(this.random() * (index + 1));
+      [activePlayers[index], activePlayers[swapIndex]] = [
+        activePlayers[swapIndex],
+        activePlayers[index],
+      ];
+    }
+    activePlayers.forEach((candidate, index) => {
+      candidate.turnOrder = index + 1;
+    });
   }
 
   private createUniqueCode(): string {
@@ -569,12 +811,22 @@ function toSnapshot(room: InternalRoom): RoomSnapshot {
     match: room.match
       ? {
           activePlayerId: room.match.activePlayerId,
-          attempts: room.match.attempts,
+          attempts:
+            room.mode !== 'duos' && room.status === 'playing'
+              ? room.match.attempts.map((attempt) => ({
+                  ...attempt,
+                  elapsedMs: 0,
+                }))
+              : room.match.attempts,
+          challengedByIds: room.match.challengedByIds,
           championId: room.match.championId,
           countdownEndsAt: room.match.countdownEndsAt,
           currentRound: room.match.currentRound,
           isTiebreak: room.match.isTiebreak,
+          loserId: room.match.loserId,
           phase: room.match.phase,
+          previousPlayerId: room.match.previousPlayerId,
+          resolution: room.match.resolution,
           targetMs: room.match.targetMs,
           totalRounds: room.match.totalRounds,
           verifiedPlayerIds: room.match.verifiedPlayerIds,

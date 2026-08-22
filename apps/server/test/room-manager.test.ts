@@ -108,6 +108,8 @@ describe('RoomManager', () => {
     const manager = new RoomManager(
       () => 'START',
       () => 7_000,
+      Date.now,
+      () => 0.5,
     );
     manager.create({ ...roomOptions, mode: 'points' }, 'socket-1');
     manager.join({ code: 'START', nickname: 'Ana' }, 'socket-2');
@@ -119,11 +121,15 @@ describe('RoomManager', () => {
     expect(room.match).toEqual({
       activePlayerId: room.players[0].id,
       attempts: [],
+      challengedByIds: [],
       championId: null,
-      countdownEndsAt: null,
+      countdownEndsAt: expect.any(Number),
       currentRound: 1,
       isTiebreak: false,
-      phase: 'ready',
+      loserId: null,
+      phase: 'countdown',
+      previousPlayerId: null,
+      resolution: null,
       targetMs: 7_000,
       totalRounds: 5,
       verifiedPlayerIds: [],
@@ -134,14 +140,15 @@ describe('RoomManager', () => {
     );
   });
 
-  it('measures each turn on the server and advances to the next player', () => {
+  it('carries hidden accumulated time between players and resolves a wrong challenge', () => {
     let now = 1_000;
     const manager = new RoomManager(
       () => 'TURNS',
       () => 7_000,
       () => now,
+      () => 0.5,
     );
-    manager.create({ ...roomOptions, mode: 'points' }, 'socket-1');
+    manager.create({ ...roomOptions, mode: 'elimination' }, 'socket-1');
     manager.join({ code: 'TURNS', nickname: 'Ana' }, 'socket-2');
     manager.setReady('socket-2', true);
     const game = manager.start('socket-1');
@@ -155,44 +162,106 @@ describe('RoomManager', () => {
     expect(manager.beginTiming('TURNS', game.players[0].id).match?.phase).toBe(
       'timing',
     );
-    now = 11_020;
+    now = 7_000;
     const afterHost = manager.stopTurn('socket-1');
 
     expect(afterHost.match).toMatchObject({
       activePlayerId: afterHost.players[1].id,
-      attempts: [{ elapsedMs: 7_020, playerId: afterHost.players[0].id }],
-      phase: 'ready',
+      attempts: [{ elapsedMs: 0, playerId: afterHost.players[0].id }],
+      phase: 'countdown',
+      previousPlayerId: afterHost.players[0].id,
     });
-    manager.startTurn('socket-2');
-    now = 14_020;
+    now = 10_000;
     manager.beginTiming('TURNS', afterHost.players[1].id);
-    now = 21_010;
-    expect(manager.stopTurn('socket-2').match).toMatchObject({
-      phase: 'verification',
+    now = 12_000;
+    const afterGuest = manager.stopTurn('socket-2');
+    expect(afterGuest.match).toMatchObject({
+      activePlayerId: afterGuest.players[0].id,
+      phase: 'countdown',
+      previousPlayerId: afterGuest.players[1].id,
     });
-    expect(manager.verifyTime('socket-1').match).toMatchObject({
-      phase: 'verification',
-      verifiedPlayerIds: [afterHost.players[0].id],
-    });
-    expect(() => manager.verifyTime('socket-1')).toThrow(
-      'Você já verificou o tempo nesta rodada.',
-    );
-    const result = manager.verifyTime('socket-2');
+    const result = manager.challenge('socket-1');
     expect(result.status).toBe('results');
     expect(result.match).toMatchObject({
       phase: 'result',
+      resolution: 'challenge-wrong',
       winnerIds: [result.players[1].id],
     });
-    expect(result.players[1].score).toBe(1);
+    expect(result.players[0].shieldActive).toBe(false);
     const nextRound = manager.advanceRound('TURNS');
     expect(nextRound.match).toMatchObject({
       attempts: [],
+      challengedByIds: [],
       currentRound: 2,
       phase: 'ready',
+      previousPlayerId: null,
       verifiedPlayerIds: [],
       winnerIds: [],
     });
-    expect(nextRound.players[1].score).toBe(1);
+    expect(nextRound.players[0].shieldActive).toBe(false);
+  });
+
+  it('awards a correct challenge when the previous player passed the target', () => {
+    let now = 1_000;
+    const manager = new RoomManager(
+      () => 'RIGHT',
+      () => 7_000,
+      () => now,
+      () => 0.5,
+    );
+    manager.create({ ...roomOptions, mode: 'elimination' }, 'socket-1');
+    manager.join({ code: 'RIGHT', nickname: 'Ana' }, 'socket-2');
+    manager.setReady('socket-2', true);
+    const game = manager.start('socket-1');
+    manager.startTurn('socket-1');
+    now = 4_000;
+    manager.beginTiming('RIGHT', game.players[0].id);
+    now = 12_000;
+    manager.stopTurn('socket-1');
+
+    const result = manager.challenge('socket-2');
+    expect(result.match).toMatchObject({
+      loserId: result.players[0].id,
+      resolution: 'challenge-correct',
+      winnerIds: [result.players[1].id],
+    });
+    expect(result.players[0].shieldActive).toBe(false);
+  });
+
+  it('spends the shield before eliminating the loser', () => {
+    let now = 1_000;
+    const manager = new RoomManager(
+      () => 'ELIM1',
+      () => 7_000,
+      () => now,
+      () => 0.5,
+    );
+    manager.create({ ...roomOptions, maxPlayers: 2 }, 'socket-1');
+    manager.join({ code: 'ELIM1', nickname: 'Ana' }, 'socket-2');
+    manager.setReady('socket-2', true);
+    let game = manager.start('socket-1');
+
+    manager.startTurn('socket-1');
+    now = 4_000;
+    manager.beginTiming('ELIM1', game.players[0].id);
+    now = 12_000;
+    manager.stopTurn('socket-1');
+    let result = manager.challenge('socket-2');
+    expect(result.players[0]).toMatchObject({
+      isEliminated: false,
+      shieldActive: false,
+    });
+
+    game = manager.advanceRound('ELIM1');
+    manager.startTurn('socket-1');
+    now = 15_000;
+    manager.beginTiming('ELIM1', game.players[0].id);
+    now = 23_000;
+    manager.stopTurn('socket-1');
+    result = manager.challenge('socket-2');
+    expect(result.players[0].isEliminated).toBe(true);
+    expect(result.match?.championId).toBe(result.players[1].id);
+    expect(result.status).toBe('finished');
   });
 
   it('requires every guest to be ready before the host starts', () => {
@@ -200,7 +269,7 @@ describe('RoomManager', () => {
       () => 'READY',
       () => 7_000,
     );
-    manager.create({ ...roomOptions, mode: 'points' }, 'socket-1');
+    manager.create({ ...roomOptions, mode: 'elimination' }, 'socket-1');
     manager.join({ code: 'READY', nickname: 'Ana' }, 'socket-2');
 
     expect(() => manager.start('socket-1')).toThrow(
@@ -216,8 +285,9 @@ describe('RoomManager', () => {
       () => 'LIMIT',
       () => 7_000,
       () => now,
+      () => 0.5,
     );
-    manager.create({ ...roomOptions, mode: 'points' }, 'socket-1');
+    manager.create({ ...roomOptions, mode: 'elimination' }, 'socket-1');
     manager.join({ code: 'LIMIT', nickname: 'Ana' }, 'socket-2');
     manager.setReady('socket-2', true);
     const game = manager.start('socket-1');
@@ -228,9 +298,10 @@ describe('RoomManager', () => {
     const expired = manager.expireTurn('LIMIT', game.players[0].id);
 
     expect(expired.match).toMatchObject({
-      activePlayerId: game.players[1].id,
+      activePlayerId: game.players[0].id,
       attempts: [{ elapsedMs: 14_000, playerId: game.players[0].id }],
-      phase: 'ready',
+      phase: 'result',
+      resolution: 'limit',
     });
     expect(() => manager.expireTurn('LIMIT', game.players[0].id)).toThrow(
       'O cronômetro não está rodando.',

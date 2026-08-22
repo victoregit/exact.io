@@ -11,6 +11,7 @@ export const SocketEvents = {
   ROUND_NEXT: 'round:next',
   ROUND_START: 'round:start',
   ROUND_STOP: 'round:stop',
+  ROUND_CHALLENGE: 'round:challenge',
   ROUND_RESULT: 'round:result',
   ROUND_VERIFY: 'round:verify',
   GAME_END: 'game:end',
@@ -50,11 +51,20 @@ export interface RoomSnapshot {
 export interface RoomMatchSnapshot {
   activePlayerId: string;
   attempts: RoomAttemptSnapshot[];
+  challengedByIds: string[];
   championId: string | null;
   countdownEndsAt: number | null;
   currentRound: number;
   isTiebreak: boolean;
+  loserId: string | null;
   phase: 'countdown' | 'ready' | 'result' | 'timing' | 'verification';
+  previousPlayerId: string | null;
+  resolution:
+    | 'challenge-correct'
+    | 'challenge-wrong'
+    | 'closest'
+    | 'limit'
+    | null;
   targetMs: number;
   totalRounds: number;
   verifiedPlayerIds: string[];
@@ -121,6 +131,9 @@ export interface ClientToServerEvents {
   'game:start': (acknowledge: (response: GameActionResponse) => void) => void;
   'round:start': (acknowledge: (response: GameActionResponse) => void) => void;
   'round:stop': (acknowledge: (response: GameActionResponse) => void) => void;
+  'round:challenge': (
+    acknowledge: (response: GameActionResponse) => void,
+  ) => void;
   'round:verify': (acknowledge: (response: GameActionResponse) => void) => void;
   'round:next': (acknowledge: (response: GameActionResponse) => void) => void;
 }
