@@ -174,7 +174,7 @@ describe('RoomManager', () => {
     manager.startTurn('socket-2');
     now = 10_000;
     manager.beginTiming('TURNS', afterHost.players[1].id);
-    now = 12_000;
+    now = 19_000;
     const afterGuest = manager.stopTurn('socket-2');
     expect(afterGuest.match).toMatchObject({
       activePlayerId: afterGuest.players[0].id,
@@ -217,7 +217,7 @@ describe('RoomManager', () => {
     manager.startTurn('socket-1');
     now = 4_000;
     manager.beginTiming('RIGHT', game.players[0].id);
-    now = 12_000;
+    now = 19_000;
     manager.stopTurn('socket-1');
 
     const result = manager.challenge('socket-2');
@@ -245,7 +245,7 @@ describe('RoomManager', () => {
     manager.startTurn('socket-1');
     now = 4_000;
     manager.beginTiming('ELIM1', game.players[0].id);
-    now = 12_000;
+    now = 19_000;
     manager.stopTurn('socket-1');
     let result = manager.challenge('socket-2');
     expect(result.players[0]).toMatchObject({
@@ -255,9 +255,9 @@ describe('RoomManager', () => {
 
     game = manager.advanceRound('ELIM1');
     manager.startTurn('socket-1');
-    now = 15_000;
+    now = 22_000;
     manager.beginTiming('ELIM1', game.players[0].id);
-    now = 23_000;
+    now = 37_000;
     manager.stopTurn('socket-1');
     result = manager.challenge('socket-2');
     expect(result.players[0].isEliminated).toBe(true);
@@ -300,7 +300,7 @@ describe('RoomManager', () => {
 
     expect(expired.match).toMatchObject({
       activePlayerId: game.players[0].id,
-      attempts: [{ elapsedMs: 16_000, playerId: game.players[0].id }],
+      attempts: [{ elapsedMs: 28_000, playerId: game.players[0].id }],
       phase: 'result',
       resolution: 'limit',
     });

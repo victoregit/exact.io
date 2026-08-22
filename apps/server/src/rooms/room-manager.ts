@@ -753,8 +753,10 @@ export class RoomManager {
   }
 
   private targetForMode(mode: RoomSnapshot['mode']): number {
-    const target = this.createTarget();
-    return mode === 'points' ? target : Math.min(20_000, Math.max(8_000, target));
+    if (mode === 'points') return this.createTarget();
+
+    // Turn-based rounds need enough room for the hot-potato handoff.
+    return 8_000 + Math.floor(this.random() * 12_001);
   }
 
   private createUniqueCode(): string {
