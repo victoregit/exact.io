@@ -263,7 +263,7 @@ export class RoomManager {
       phase: room.mode === 'points' ? 'countdown' : 'ready',
       previousPlayerId: null,
       resolution: null,
-      targetMs: this.createTarget(),
+      targetMs: this.targetForMode(room.mode),
       totalRounds: room.rounds,
       turnStartedAtMs: null,
       verifiedPlayerIds: [],
@@ -297,7 +297,7 @@ export class RoomManager {
       room.status !== 'playing' ||
       !match ||
       match.phase !== 'countdown' ||
-      match.activePlayerId !== playerId
+      (room.mode !== 'points' && match.activePlayerId !== playerId)
     ) {
       throw new RoomError(
         'COUNTDOWN_NOT_RUNNING',
@@ -397,7 +397,11 @@ export class RoomManager {
   challenge(socketId: string): RoomSnapshot {
     const { player, room } = this.getActiveTurn(socketId);
     const match = room.match;
-    if (!match || room.mode === 'points' || match.previousPlayerId === null) {
+    if (
+      !match ||
+      room.mode !== 'elimination' ||
+      match.previousPlayerId === null
+    ) {
       throw new RoomError('CHALLENGE_UNAVAILABLE', 'Não há jogador para desafiar.');
     }
     if (match.phase === 'result' || match.phase === 'verification') {
@@ -420,11 +424,6 @@ export class RoomManager {
         : (previousAttempt?.elapsedMs ?? 0) >= match.targetMs;
     const winnerId = correct ? player.id : match.previousPlayerId;
     const loserId = correct ? match.previousPlayerId : player.id;
-    if (room.mode === 'duos') {
-      const winner = room.players.find((candidate) => candidate.id === winnerId);
-      if (winner) winner.score += 1;
-      return toSnapshot(room);
-    }
     this.resolveHotPotatoRound(
       room,
       winnerId,
@@ -474,8 +473,8 @@ export class RoomManager {
       );
       const nextPlayer = activePlayers[(currentIndex + 1) % activePlayers.length];
       match.activePlayerId = nextPlayer.id;
-      match.phase = 'countdown';
-      match.countdownEndsAt = this.now() + 3_000;
+      match.phase = 'ready';
+      match.countdownEndsAt = null;
       return;
     }
     match.attempts.push({ elapsedMs, playerId });
@@ -685,7 +684,7 @@ export class RoomManager {
       phase: room.mode === 'points' ? 'countdown' : 'ready',
       previousPlayerId: null,
       resolution: null,
-      targetMs: this.createTarget(),
+      targetMs: this.targetForMode(room.mode),
       totalRounds: room.match.totalRounds,
       turnStartedAtMs: null,
       verifiedPlayerIds: [],
@@ -751,6 +750,11 @@ export class RoomManager {
     activePlayers.forEach((candidate, index) => {
       candidate.turnOrder = index + 1;
     });
+  }
+
+  private targetForMode(mode: RoomSnapshot['mode']): number {
+    const target = this.createTarget();
+    return mode === 'points' ? target : Math.min(20_000, Math.max(8_000, target));
   }
 
   private createUniqueCode(): string {

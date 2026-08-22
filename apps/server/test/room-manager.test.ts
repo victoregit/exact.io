@@ -168,16 +168,17 @@ describe('RoomManager', () => {
     expect(afterHost.match).toMatchObject({
       activePlayerId: afterHost.players[1].id,
       attempts: [{ elapsedMs: 0, playerId: afterHost.players[0].id }],
-      phase: 'countdown',
+      phase: 'ready',
       previousPlayerId: afterHost.players[0].id,
     });
+    manager.startTurn('socket-2');
     now = 10_000;
     manager.beginTiming('TURNS', afterHost.players[1].id);
     now = 12_000;
     const afterGuest = manager.stopTurn('socket-2');
     expect(afterGuest.match).toMatchObject({
       activePlayerId: afterGuest.players[0].id,
-      phase: 'countdown',
+      phase: 'ready',
       previousPlayerId: afterGuest.players[1].id,
     });
     const result = manager.challenge('socket-1');
@@ -299,7 +300,7 @@ describe('RoomManager', () => {
 
     expect(expired.match).toMatchObject({
       activePlayerId: game.players[0].id,
-      attempts: [{ elapsedMs: 14_000, playerId: game.players[0].id }],
+      attempts: [{ elapsedMs: 16_000, playerId: game.players[0].id }],
       phase: 'result',
       resolution: 'limit',
     });

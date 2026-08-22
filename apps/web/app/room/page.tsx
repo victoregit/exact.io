@@ -398,7 +398,7 @@ export default function RoomPage() {
                 {room.mode === 'points'
                   ? `${room.rounds} RODADAS`
                   : room.mode === 'duos'
-                    ? `DUPLAS · ${room.rounds} RODADAS`
+                    ? `TIME 1 × TIME 2 · ${room.rounds} RODADAS`
                     : 'ELIMINATÓRIO'}
               </span>
               <span>
@@ -422,7 +422,7 @@ export default function RoomPage() {
                     {[
                       player.isHost ? 'HOST' : null,
                       room.match ? `${player.score} PT` : null,
-                      player.team ? `DUPLA ${player.team}` : null,
+                      player.team ? `TIME ${player.team === 'AB' ? '1' : '2'}` : null,
                       player.team ? `T${player.turnOrder}` : null,
                       !player.team &&
                       room.mode === 'elimination' &&
@@ -496,7 +496,7 @@ export default function RoomPage() {
                         key={team}
                       >
                         <p className="text-[10px] font-bold tracking-widest text-zinc-500">
-                          DUPLA {team}
+                          TIME {team === 'AB' ? '1' : '2'}
                         </p>
                         <p className="mt-1 font-mono text-2xl font-black text-white">
                           {room.players
@@ -589,7 +589,7 @@ export default function RoomPage() {
                           : 'INICIAR'}
                     </button>
                   )}
-                {room.mode !== 'points' &&
+                {room.mode === 'elimination' &&
                   room.match.previousPlayerId &&
                   room.match.phase !== 'result' &&
                   !room.match.challengedByIds.includes(
