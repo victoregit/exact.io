@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'EXACT — Time precision game',
   description: 'Test how precisely you can feel the passage of time.',
   icons: {
-    icon: '/icon.svg',
+    icon: '/icon.png',
   },
 };
 

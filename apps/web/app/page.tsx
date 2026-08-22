@@ -18,6 +18,7 @@ import {
 } from '@exact-io/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 import { playSound, type SoundCue } from './audio';
 import { submitDailyRanking } from './ranking-client';
@@ -313,9 +314,14 @@ export default function HomePage() {
       <section className="relative flex min-h-[640px] w-full max-w-xl flex-col rounded-[2rem] border border-white/10 bg-zinc-950/70 p-6 shadow-2xl shadow-black/40 backdrop-blur sm:min-h-[680px] sm:p-10">
         <header className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold tracking-[0.35em] text-emerald-400">
-              EXACT
-            </p>
+            <Image
+              alt="EXACT"
+              className="h-auto w-24"
+              height={477}
+              priority
+              src="/exact-logo-final.png"
+              width={1281}
+            />
             <p className="mt-1 text-[10px] tracking-[0.22em] text-zinc-600">
               DESAFIO DIÁRIO
             </p>
@@ -361,11 +367,15 @@ export default function HomePage() {
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           {gameState === 'idle' && (
             <>
-              <p className="text-sm font-semibold tracking-[0.3em] text-emerald-400">
-                FEEL THE TIME
-              </p>
-              <h1 className="mt-5 text-6xl font-black tracking-tighter text-white sm:text-8xl">
-                EXACT
+              <h1 className="w-full max-w-md">
+                <Image
+                  alt="EXACT"
+                  className="h-auto w-full"
+                  height={477}
+                  priority
+                  src="/exact-logo-final.png"
+                  width={1281}
+                />
               </h1>
               {dailyResultLoaded && dailyResult ? (
                 <div className="mt-8 w-full max-w-sm rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-6 py-6">

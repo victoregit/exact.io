@@ -8,6 +8,7 @@ import {
   type ServerToClientEvents,
 } from '@exact-io/shared';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
@@ -233,7 +234,13 @@ export default function RoomPage() {
             <span className="text-base leading-none transition-transform group-hover:-translate-x-0.5">
               ←
             </span>
-            <span>EXACT</span>
+            <Image
+              alt="EXACT"
+              className="h-auto w-16"
+              height={477}
+              src="/exact-logo-final.png"
+              width={1281}
+            />
           </Link>
           <span className="inline-flex items-center gap-2 text-[10px] font-bold tracking-widest text-zinc-500">
             <span

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
 import {
@@ -46,10 +47,21 @@ export default function RankingPage() {
       <section className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-zinc-950/70 p-6 shadow-2xl sm:p-10">
         <header className="flex items-center justify-between">
           <Link
-            className="text-xs font-bold tracking-[0.35em] text-emerald-400"
+            aria-label="Voltar para o início"
+            className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] font-black tracking-[0.18em] text-zinc-400 transition hover:border-emerald-400/40 hover:bg-emerald-400/10 hover:text-emerald-300 active:scale-95"
             href="/"
+            title="Voltar para o início"
           >
-            EXACT
+            <span className="text-base leading-none transition-transform group-hover:-translate-x-0.5">
+              ←
+            </span>
+            <Image
+              alt="EXACT"
+              className="h-auto w-16"
+              height={477}
+              src="/exact-logo-final.png"
+              width={1281}
+            />
           </Link>
           <span className="text-[10px] font-bold tracking-[0.3em] text-zinc-600">
             RANKING GLOBAL
