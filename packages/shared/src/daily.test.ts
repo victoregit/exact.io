@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { getLocalDateKey, parseDailyResult, updateDailyResult } from './daily';
+import {
+  getLocalDateKey,
+  getSaoPauloDateKey,
+  parseDailyResult,
+  updateDailyResult,
+} from './daily';
 
 describe('daily result', () => {
   it('uses the local calendar date as its key', () => {
     expect(getLocalDateKey(new Date(2026, 7, 22, 23, 59))).toBe('2026-08-22');
+  });
+
+  it('uses the São Paulo calendar day for the global ranking', () => {
+    expect(getSaoPauloDateKey(new Date('2026-08-22T02:30:00Z'))).toBe(
+      '2026-08-21',
+    );
   });
 
   it('keeps only the strongest result from the day', () => {

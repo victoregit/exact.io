@@ -23,6 +23,7 @@ export default function RoomPage() {
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const socketRef = useRef<Socket<
     ServerToClientEvents,
     ClientToServerEvents
@@ -49,6 +50,13 @@ export default function RoomPage() {
       socketRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (room?.match?.phase !== 'countdown') return;
+    setClockNow(Date.now());
+    const interval = window.setInterval(() => setClockNow(Date.now()), 100);
+    return () => window.clearInterval(interval);
+  }, [room?.match?.countdownEndsAt, room?.match?.phase]);
 
   function rememberNickname() {
     try {
@@ -130,6 +138,34 @@ export default function RoomPage() {
   function setReady(ready: boolean) {
     setError('');
     socketRef.current?.emit(SocketEvents.ROOM_READY, ready, (response) => {
+      if (!response.ok) {
+        setError(response.message);
+        return;
+      }
+      setRoom(response.room);
+    });
+  }
+
+  function setAutoAdvance(enabled: boolean) {
+    setError('');
+    socketRef.current?.emit(
+      SocketEvents.ROOM_AUTO_ADVANCE,
+      enabled,
+      (response) => {
+        if (!response.ok) {
+          setError(response.message);
+          return;
+        }
+        setRoom(response.room);
+      },
+    );
+  }
+
+  function runTurnAction(
+    event: 'round:next' | 'round:start' | 'round:stop' | 'round:verify',
+  ) {
+    setError('');
+    socketRef.current?.emit(event, (response) => {
       if (!response.ok) {
         setError(response.message);
         return;
@@ -325,6 +361,7 @@ export default function RoomPage() {
                   <span className="text-xs text-zinc-500">
                     {[
                       player.isHost ? 'HOST' : null,
+                      room.match ? `${player.score} PT` : null,
                       player.team ? `DUPLA ${player.team}` : null,
                       player.team ? `T${player.turnOrder}` : null,
                       !player.team &&
@@ -350,6 +387,25 @@ export default function RoomPage() {
             )}
             {room.match ? (
               <div className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-6">
+                {room.mode === 'duos' && (
+                  <div className="mb-6 grid grid-cols-2 gap-3">
+                    {(['AB', 'CD'] as const).map((team) => (
+                      <div
+                        className="rounded-xl border border-white/10 bg-black/20 p-3"
+                        key={team}
+                      >
+                        <p className="text-[10px] font-bold tracking-widest text-zinc-500">
+                          DUPLA {team}
+                        </p>
+                        <p className="mt-1 font-mono text-2xl font-black text-white">
+                          {room.players
+                            .filter((player) => player.team === team)
+                            .reduce((total, player) => total + player.score, 0)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <p className="text-[10px] font-bold tracking-[0.3em] text-emerald-400">
                   RODADA {room.match.currentRound}/{room.match.totalRounds}
                 </p>
@@ -364,10 +420,144 @@ export default function RoomPage() {
                     )?.nickname ?? 'JOGADOR'}
                   </strong>
                 </p>
+                <p className="mt-2 text-xs font-bold tracking-widest text-zinc-600">
+                  {room.match.attempts.length}/{room.players.length} JOGARAM
+                </p>
                 <p className="mt-3 text-xs text-zinc-600">
                   A rodada permanece aberta até todos jogarem ou até{' '}
                   {((room.match.targetMs * 2) / 1000).toFixed(2)}s.
                 </p>
+                {(room.match.phase === 'ready' ||
+                  room.match.phase === 'timing') &&
+                  room.players
+                    .find((player) => player.id === room.match?.activePlayerId)
+                    ?.nickname.toLocaleLowerCase() ===
+                    nickname.trim().toLocaleLowerCase() && (
+                    <button
+                      className={`mt-6 w-full cursor-pointer rounded-2xl px-6 py-5 text-sm font-black tracking-[0.2em] transition ${
+                        room.match.phase === 'timing'
+                          ? 'bg-rose-500 text-white hover:bg-rose-400'
+                          : 'bg-emerald-400 text-zinc-950 hover:bg-emerald-300'
+                      }`}
+                      onClick={() =>
+                        runTurnAction(
+                          room.match?.phase === 'timing'
+                            ? SocketEvents.ROUND_STOP
+                            : SocketEvents.ROUND_START,
+                        )
+                      }
+                      type="button"
+                    >
+                      {room.match.phase === 'timing' ? 'PARAR' : 'INICIAR'}
+                    </button>
+                  )}
+                {room.match.phase === 'countdown' && (
+                  <div className="mt-6 rounded-2xl bg-white/[0.04] py-6">
+                    <p className="text-[10px] font-bold tracking-[0.3em] text-zinc-500">
+                      PREPARE-SE
+                    </p>
+                    <p className="mt-2 font-mono text-6xl font-black text-emerald-400">
+                      {Math.max(
+                        1,
+                        Math.ceil(
+                          ((room.match.countdownEndsAt ?? clockNow) -
+                            clockNow) /
+                            1000,
+                        ),
+                      )}
+                    </p>
+                  </div>
+                )}
+                {room.match.phase === 'timing' && (
+                  <p className="mt-5 animate-pulse text-xs font-bold tracking-widest text-rose-400">
+                    CRONÔMETRO OCULTO EM ANDAMENTO
+                  </p>
+                )}
+                {room.match.phase === 'verification' && (
+                  <>
+                    <p className="mt-5 text-xs font-bold tracking-widest text-emerald-400">
+                      TODOS JOGARAM · {room.match.verifiedPlayerIds.length}/
+                      {room.players.length} VERIFICARAM
+                    </p>
+                    {!room.match.verifiedPlayerIds.includes(
+                      room.players.find(
+                        (player) =>
+                          player.nickname.toLocaleLowerCase() ===
+                          nickname.trim().toLocaleLowerCase(),
+                      )?.id ?? '',
+                    ) && (
+                      <button
+                        className="mt-6 w-full cursor-pointer rounded-2xl border border-emerald-400/50 bg-emerald-400/10 px-6 py-5 text-sm font-black tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-400/20"
+                        onClick={() => runTurnAction(SocketEvents.ROUND_VERIFY)}
+                        type="button"
+                      >
+                        VERIFICAR TEMPO
+                      </button>
+                    )}
+                  </>
+                )}
+                {room.match.phase === 'result' && (
+                  <div className="mt-6 border-t border-white/10 pt-5">
+                    {room.match.championId && (
+                      <p className="mb-4 text-sm font-black tracking-widest text-amber-300">
+                        CAMPEÃO:{' '}
+                        {room.mode === 'duos'
+                          ? `DUPLA ${room.match.championId}`
+                          : (room.players.find(
+                              (player) => player.id === room.match?.championId,
+                            )?.nickname ?? 'JOGADOR')}
+                      </p>
+                    )}
+                    <p className="text-xs font-bold tracking-widest text-emerald-400">
+                      {room.match.winnerIds.length === 1
+                        ? `${room.players.find((player) => player.id === room.match?.winnerIds[0])?.nickname ?? 'JOGADOR'} VENCEU A RODADA`
+                        : 'EMPATE NA RODADA'}
+                    </p>
+                    <div className="mt-4 space-y-2 text-left text-xs text-zinc-400">
+                      {room.match.attempts.map((attempt) => (
+                        <p key={attempt.playerId}>
+                          {room.players.find(
+                            (player) => player.id === attempt.playerId,
+                          )?.nickname ?? 'Jogador'}{' '}
+                          · {(attempt.elapsedMs / 1000).toFixed(2)}s
+                        </p>
+                      ))}
+                    </div>
+                    {room.status !== 'finished' &&
+                      (room.autoAdvance ? (
+                        <p className="mt-5 text-[10px] font-bold tracking-widest text-emerald-400">
+                          INÍCIO AUTOMÁTICO · PRÓXIMA RODADA EM INSTANTES…
+                        </p>
+                      ) : room.players.find(
+                          (player) =>
+                            player.nickname.toLocaleLowerCase() ===
+                            nickname.trim().toLocaleLowerCase(),
+                        )?.isHost ? (
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                          <button
+                            className="cursor-pointer rounded-2xl bg-emerald-400 px-3 py-4 text-[10px] font-black tracking-widest text-zinc-950 transition hover:bg-emerald-300"
+                            onClick={() =>
+                              runTurnAction(SocketEvents.ROUND_NEXT)
+                            }
+                            type="button"
+                          >
+                            PRÓXIMA RODADA
+                          </button>
+                          <button
+                            className="cursor-pointer rounded-2xl border border-emerald-400/40 px-3 py-4 text-[10px] font-black tracking-widest text-emerald-300 transition hover:bg-emerald-400/10"
+                            onClick={() => setAutoAdvance(true)}
+                            type="button"
+                          >
+                            INÍCIO AUTOMÁTICO
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="mt-5 text-[10px] font-bold tracking-widest text-zinc-500">
+                          AGUARDANDO O HOST…
+                        </p>
+                      ))}
+                  </div>
+                )}
               </div>
             ) : (
               <>

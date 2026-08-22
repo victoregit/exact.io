@@ -4,12 +4,15 @@ export const SocketEvents = {
   ROOM_JOIN: 'room:join',
   ROOM_LEAVE: 'room:leave',
   ROOM_READY: 'room:ready',
+  ROOM_AUTO_ADVANCE: 'room:auto-advance',
   ROOM_STATE: 'room:state',
   GAME_START: 'game:start',
   ROUND_PREPARE: 'round:prepare',
+  ROUND_NEXT: 'round:next',
   ROUND_START: 'round:start',
   ROUND_STOP: 'round:stop',
   ROUND_RESULT: 'round:result',
+  ROUND_VERIFY: 'round:verify',
   GAME_END: 'game:end',
 } as const;
 
@@ -34,6 +37,7 @@ export interface RoomPlayer {
 }
 
 export interface RoomSnapshot {
+  autoAdvance: boolean;
   code: string;
   match: RoomMatchSnapshot | null;
   maxPlayers: number;
@@ -45,10 +49,21 @@ export interface RoomSnapshot {
 
 export interface RoomMatchSnapshot {
   activePlayerId: string;
+  attempts: RoomAttemptSnapshot[];
+  championId: string | null;
+  countdownEndsAt: number | null;
   currentRound: number;
   isTiebreak: boolean;
+  phase: 'countdown' | 'ready' | 'result' | 'timing' | 'verification';
   targetMs: number;
   totalRounds: number;
+  verifiedPlayerIds: string[];
+  winnerIds: string[];
+}
+
+export interface RoomAttemptSnapshot {
+  elapsedMs: number;
+  playerId: string;
 }
 
 export interface ConnectionHelloPayload {
@@ -99,7 +114,15 @@ export interface ClientToServerEvents {
     ready: boolean,
     acknowledge: (response: GameActionResponse) => void,
   ) => void;
+  'room:auto-advance': (
+    enabled: boolean,
+    acknowledge: (response: GameActionResponse) => void,
+  ) => void;
   'game:start': (acknowledge: (response: GameActionResponse) => void) => void;
+  'round:start': (acknowledge: (response: GameActionResponse) => void) => void;
+  'round:stop': (acknowledge: (response: GameActionResponse) => void) => void;
+  'round:verify': (acknowledge: (response: GameActionResponse) => void) => void;
+  'round:next': (acknowledge: (response: GameActionResponse) => void) => void;
 }
 
 export interface ServerToClientEvents {

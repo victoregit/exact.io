@@ -9,7 +9,7 @@ import {
   calculateScore,
   classifyPrecision,
   generateDailyTargetMs,
-  getLocalDateKey,
+  getSaoPauloDateKey,
   parseDailyResult,
   parseSoloRecords,
   summarizeSession,
@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { playSound, type SoundCue } from './audio';
+import { submitDailyRanking } from './ranking-client';
 import { useRealtimeStatus } from './use-realtime-status';
 
 type GameState =
@@ -40,6 +41,8 @@ const TOTAL_ROUNDS = 5;
 const RECORDS_STORAGE_KEY = 'exact:solo-records:v2';
 const SOUND_STORAGE_KEY = 'exact:sound-enabled:v1';
 const DAILY_STORAGE_KEY = 'exact:daily-result:v1';
+const DEVICE_KEY_STORAGE_KEY = 'exact:device-key:v1';
+const NICKNAME_STORAGE_KEY = 'exact:nickname:v1';
 
 const precisionStyles: Record<PrecisionLabel, string> = {
   PERFECT: 'text-emerald-300 drop-shadow-[0_0_24px_rgba(52,211,153,0.85)]',
@@ -69,6 +72,10 @@ export default function HomePage() {
   const [records, setRecords] = useState<SoloRecords>(EMPTY_SOLO_RECORDS);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [dailyResult, setDailyResult] = useState<DailyResult | null>(null);
+  const [nickname, setNickname] = useState('');
+  const [rankingStatus, setRankingStatus] = useState<
+    'error' | 'idle' | 'saved' | 'sending'
+  >('idle');
   const audioContextRef = useRef<AudioContext | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
@@ -87,10 +94,18 @@ export default function HomePage() {
 
   useEffect(() => {
     try {
+      setNickname(window.localStorage.getItem(NICKNAME_STORAGE_KEY) ?? '');
+    } catch {
+      setNickname('');
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
       const stored = parseDailyResult(
         window.localStorage.getItem(DAILY_STORAGE_KEY),
       );
-      setDailyResult(stored?.date === getLocalDateKey() ? stored : null);
+      setDailyResult(stored?.date === getSaoPauloDateKey() ? stored : null);
     } catch {
       setDailyResult(null);
     }
@@ -131,7 +146,7 @@ export default function HomePage() {
 
   const beginRound = useCallback(() => {
     setTargetMs(
-      generateDailyTargetMs(getLocalDateKey(), nextRoundIndexRef.current),
+      generateDailyTargetMs(getSaoPauloDateKey(), nextRoundIndexRef.current),
     );
     nextRoundIndexRef.current += 1;
     setResult(null);
@@ -142,6 +157,14 @@ export default function HomePage() {
   }, []);
 
   const beginSession = useCallback(() => {
+    const normalizedNickname = nickname.trim();
+    if (normalizedNickname.length < 2 || normalizedNickname.length > 16) return;
+    try {
+      window.localStorage.setItem(NICKNAME_STORAGE_KEY, normalizedNickname);
+    } catch {
+      // Nickname remains available for this page session.
+    }
+    setRankingStatus('idle');
     if (soundEnabled) {
       const context = audioContextRef.current ?? new AudioContext();
       audioContextRef.current = context;
@@ -151,7 +174,7 @@ export default function HomePage() {
     sessionSavedRef.current = false;
     setRoundResults([]);
     beginRound();
-  }, [beginRound, soundEnabled]);
+  }, [beginRound, nickname, soundEnabled]);
 
   const stopRound = useCallback(() => {
     if (stoppedRef.current || startedAtRef.current === null) return;
@@ -194,7 +217,7 @@ export default function HomePage() {
       const nextDailyResult = updateDailyResult(dailyResult, {
         bestDifferenceMs: bestSessionRound.differenceMs,
         bestScore: sessionSummary.bestScore,
-        date: getLocalDateKey(),
+        date: getSaoPauloDateKey(),
       });
 
       setRecords(nextRecords);
@@ -211,12 +234,25 @@ export default function HomePage() {
       } catch {
         // The current session still works when browser storage is unavailable.
       }
+      const normalizedNickname = nickname.trim();
+      if (normalizedNickname.length >= 2 && normalizedNickname.length <= 16) {
+        setRankingStatus('sending');
+        void submitDailyRanking({
+          deviceKey: getOrCreateDeviceKey(),
+          elapsedMs: bestSessionRound.actualMs,
+          nickname: normalizedNickname,
+          playedOn: getSaoPauloDateKey(),
+          roundIndex: sessionSummary.bestRoundIndex,
+        })
+          .then(() => setRankingStatus('saved'))
+          .catch(() => setRankingStatus('error'));
+      }
       setGameState('summary');
       return;
     }
 
     beginRound();
-  }, [beginRound, dailyResult, records, roundResults]);
+  }, [beginRound, dailyResult, nickname, records, roundResults]);
 
   useEffect(() => {
     if (gameState !== 'target') return;
@@ -331,8 +367,19 @@ export default function HomePage() {
                 Memorize o alvo. Quando o relógio desaparecer, pare no instante
                 exato.
               </p>
+              <input
+                aria-label="Seu nickname"
+                className="mt-8 w-full max-w-sm rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-white outline-none transition placeholder:text-zinc-700 focus:border-emerald-400/50"
+                maxLength={16}
+                onChange={(event) => setNickname(event.target.value)}
+                placeholder="SEU NICKNAME"
+                value={nickname}
+              />
               <button
-                className="mt-12 w-full max-w-sm cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-lg font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98]"
+                className="mt-4 w-full max-w-sm cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-lg font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={
+                  nickname.trim().length < 2 || nickname.trim().length > 16
+                }
                 onClick={beginSession}
                 type="button"
               >
@@ -345,12 +392,20 @@ export default function HomePage() {
                   {records.gamesPlayed === 1 ? 'PARTIDA' : 'PARTIDAS'}
                 </p>
               )}
-              <Link
-                className="mt-7 text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
-                href="/room"
-              >
-                SALA PRIVADA
-              </Link>
+              <div className="mt-7 flex gap-6">
+                <Link
+                  className="text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
+                  href="/ranking"
+                >
+                  RANKING
+                </Link>
+                <Link
+                  className="text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
+                  href="/room"
+                >
+                  SALA PRIVADA
+                </Link>
+              </div>
             </>
           )}
 
@@ -488,6 +543,17 @@ export default function HomePage() {
                   </p>
                 </div>
               )}
+              {rankingStatus !== 'idle' && (
+                <p
+                  className={`mt-4 text-[10px] font-bold tracking-widest ${rankingStatus === 'saved' ? 'text-emerald-400' : rankingStatus === 'error' ? 'text-amber-400' : 'text-zinc-500'}`}
+                >
+                  {rankingStatus === 'sending'
+                    ? 'ENVIANDO PARA O RANKING…'
+                    : rankingStatus === 'saved'
+                      ? 'RESULTADO SALVO NO RANKING GLOBAL'
+                      : 'RANKING GLOBAL INDISPONÍVEL · RESULTADO LOCAL SALVO'}
+                </p>
+              )}
 
               <div className="mt-8 grid grid-cols-2 gap-3">
                 <ResultMetric
@@ -563,6 +629,12 @@ export default function HomePage() {
               >
                 NOVA PARTIDA
               </button>
+              <Link
+                className="mt-6 inline-block text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
+                href="/ranking"
+              >
+                VER RANKING GLOBAL
+              </Link>
             </div>
           )}
         </div>
@@ -601,4 +673,16 @@ function RecordMetric({ label, value }: { label: string; value: string }) {
 
 function formatOptionalSeconds(milliseconds: number | null): string {
   return milliseconds === null ? '—' : formatSeconds(milliseconds);
+}
+
+function getOrCreateDeviceKey(): string {
+  try {
+    const stored = window.localStorage.getItem(DEVICE_KEY_STORAGE_KEY);
+    if (stored && stored.length >= 16) return stored;
+    const created = crypto.randomUUID();
+    window.localStorage.setItem(DEVICE_KEY_STORAGE_KEY, created);
+    return created;
+  } catch {
+    return crypto.randomUUID();
+  }
 }

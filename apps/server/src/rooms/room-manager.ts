@@ -3,17 +3,27 @@ import { randomUUID } from 'node:crypto';
 import type {
   CreateRoomPayload,
   JoinRoomPayload,
+  RoomMatchSnapshot,
   RoomPlayer,
   RoomSnapshot,
 } from '@exact-io/shared';
-import { generateTargetMs } from '@exact-io/shared';
+import {
+  generateTargetMs,
+  resolveChampionship,
+  resolveMultiplayerRound,
+} from '@exact-io/shared';
 
 interface InternalPlayer extends RoomPlayer {
   socketId: string;
   token: string;
 }
 
-interface InternalRoom extends Omit<RoomSnapshot, 'players'> {
+interface InternalMatch extends RoomMatchSnapshot {
+  turnStartedAtMs: number | null;
+}
+
+interface InternalRoom extends Omit<RoomSnapshot, 'match' | 'players'> {
+  match: InternalMatch | null;
   players: InternalPlayer[];
 }
 
@@ -33,6 +43,7 @@ export class RoomManager {
   constructor(
     private readonly createCode: () => string = generateRoomCode,
     private readonly createTarget: () => number = generateTargetMs,
+    private readonly now: () => number = Date.now,
   ) {}
 
   create(payload: CreateRoomPayload, socketId: string) {
@@ -73,6 +84,7 @@ export class RoomManager {
       playerRoleFor(payload.mode, 1),
     );
     const room: InternalRoom = {
+      autoAdvance: false,
       code,
       match: null,
       maxPlayers: payload.maxPlayers,
@@ -175,6 +187,23 @@ export class RoomManager {
     return toSnapshot(room);
   }
 
+  setAutoAdvance(socketId: string, enabled: boolean): RoomSnapshot {
+    const code = this.roomBySocket.get(socketId);
+    const room = code ? this.rooms.get(code) : undefined;
+    if (!room) throw new RoomError('ROOM_NOT_FOUND', 'Sala não encontrada.');
+    const player = room.players.find(
+      (candidate) => candidate.socketId === socketId,
+    );
+    if (!player?.isHost) {
+      throw new RoomError(
+        'HOST_ONLY',
+        'Somente o host pode alterar o início automático.',
+      );
+    }
+    room.autoAdvance = enabled;
+    return toSnapshot(room);
+  }
+
   start(socketId: string): RoomSnapshot {
     const code = this.roomBySocket.get(socketId);
     const room = code ? this.rooms.get(code) : undefined;
@@ -218,13 +247,262 @@ export class RoomManager {
     )[0];
     room.match = {
       activePlayerId: firstPlayer.id,
+      attempts: [],
+      championId: null,
+      countdownEndsAt: null,
       currentRound: 1,
       isTiebreak: false,
+      phase: 'ready',
       targetMs: this.createTarget(),
       totalRounds: room.rounds,
+      turnStartedAtMs: null,
+      verifiedPlayerIds: [],
+      winnerIds: [],
     };
     room.status = 'playing';
     return toSnapshot(room);
+  }
+
+  startTurn(socketId: string): RoomSnapshot {
+    const { player, room } = this.getActiveTurn(socketId);
+    if (room.match?.phase !== 'ready') {
+      throw new RoomError(
+        'TURN_NOT_READY',
+        'Este turno não pode ser iniciado agora.',
+      );
+    }
+    if (room.match.activePlayerId !== player.id) {
+      throw new RoomError('NOT_YOUR_TURN', 'Aguarde a sua vez.');
+    }
+    room.match.phase = 'countdown';
+    room.match.countdownEndsAt = this.now() + 3_000;
+    return toSnapshot(room);
+  }
+
+  beginTiming(code: string, playerId: string): RoomSnapshot {
+    const room = this.rooms.get(code);
+    const match = room?.match;
+    if (
+      !room ||
+      room.status !== 'playing' ||
+      !match ||
+      match.phase !== 'countdown' ||
+      match.activePlayerId !== playerId
+    ) {
+      throw new RoomError(
+        'COUNTDOWN_NOT_RUNNING',
+        'A contagem não está ativa.',
+      );
+    }
+    if (match.countdownEndsAt !== null && this.now() < match.countdownEndsAt) {
+      throw new RoomError(
+        'COUNTDOWN_NOT_FINISHED',
+        'A contagem ainda não terminou.',
+      );
+    }
+    match.countdownEndsAt = null;
+    match.phase = 'timing';
+    match.turnStartedAtMs = this.now();
+    return toSnapshot(room);
+  }
+
+  stopTurn(socketId: string): RoomSnapshot {
+    const { player, room } = this.getActiveTurn(socketId);
+    const match = room.match;
+    if (!match || match.phase !== 'timing' || match.turnStartedAtMs === null) {
+      throw new RoomError('TURN_NOT_RUNNING', 'O cronômetro não está rodando.');
+    }
+    if (match.activePlayerId !== player.id) {
+      throw new RoomError('NOT_YOUR_TURN', 'Aguarde a sua vez.');
+    }
+
+    const elapsedMs = Math.min(
+      Math.max(0, this.now() - match.turnStartedAtMs),
+      match.targetMs * 2,
+    );
+    this.completeTurn(room, player.id, elapsedMs);
+    return toSnapshot(room);
+  }
+
+  expireTurn(code: string, playerId: string): RoomSnapshot {
+    const room = this.rooms.get(code);
+    const match = room?.match;
+    if (
+      !room ||
+      room.status !== 'playing' ||
+      !match ||
+      match.phase !== 'timing' ||
+      match.activePlayerId !== playerId
+    ) {
+      throw new RoomError('TURN_NOT_RUNNING', 'O cronômetro não está rodando.');
+    }
+    this.completeTurn(room, playerId, match.targetMs * 2);
+    return toSnapshot(room);
+  }
+
+  private completeTurn(
+    room: InternalRoom,
+    playerId: string,
+    elapsedMs: number,
+  ): void {
+    const match = room.match;
+    if (!match) return;
+    match.attempts.push({ elapsedMs, playerId });
+    match.countdownEndsAt = null;
+    match.turnStartedAtMs = null;
+
+    const nextPlayer = [...room.players]
+      .sort((left, right) => left.turnOrder - right.turnOrder)
+      .find(
+        (candidate) =>
+          !match.attempts.some((attempt) => attempt.playerId === candidate.id),
+      );
+    if (nextPlayer) {
+      match.activePlayerId = nextPlayer.id;
+      match.phase = 'ready';
+    } else {
+      match.phase = 'verification';
+    }
+  }
+
+  verifyTime(socketId: string): RoomSnapshot {
+    const { player, room } = this.getActiveTurn(socketId);
+    const match = room.match;
+    if (!match || match.phase !== 'verification') {
+      throw new RoomError(
+        'VERIFICATION_NOT_OPEN',
+        'A verificação abre depois que todos jogarem.',
+      );
+    }
+    if (match.verifiedPlayerIds.includes(player.id)) {
+      throw new RoomError(
+        'VERIFICATION_ALREADY_USED',
+        'Você já verificou o tempo nesta rodada.',
+      );
+    }
+
+    match.verifiedPlayerIds.push(player.id);
+    if (match.verifiedPlayerIds.length === room.players.length) {
+      const result = resolveMultiplayerRound(
+        match.targetMs,
+        match.targetMs * 2,
+        match.attempts.map((attempt) => ({
+          contestantId: attempt.playerId,
+          elapsedMs: attempt.elapsedMs,
+        })),
+        room.players.map(({ id }) => id),
+      );
+      if (result.status === 'closed') {
+        match.winnerIds = result.winnerIds;
+        if (result.winnerIds.length === 1) {
+          const winner = room.players.find(
+            (candidate) => candidate.id === result.winnerIds[0],
+          );
+          if (winner) winner.score += 1;
+        }
+      }
+      match.phase = 'result';
+      room.status = 'results';
+      if (match.currentRound >= match.totalRounds) {
+        const standings =
+          room.mode === 'duos'
+            ? (['AB', 'CD'] as const).map((team) => ({
+                contestantId: team,
+                score: room.players
+                  .filter((candidate) => candidate.team === team)
+                  .reduce((total, candidate) => total + candidate.score, 0),
+              }))
+            : room.players.map((candidate) => ({
+                contestantId: candidate.id,
+                score: candidate.score,
+              }));
+        const championship = resolveChampionship(
+          standings,
+          match.currentRound,
+          match.totalRounds,
+        );
+        if (championship.status === 'finished') {
+          match.championId = championship.championId;
+          room.status = 'finished';
+        }
+      }
+    }
+    return toSnapshot(room);
+  }
+
+  advanceRound(code: string): RoomSnapshot {
+    const room = this.rooms.get(code);
+    if (!room || !room.match) {
+      throw new RoomError(
+        'GAME_NOT_RUNNING',
+        'A partida não está em andamento.',
+      );
+    }
+    if (room.status === 'finished') {
+      throw new RoomError('GAME_FINISHED', 'A partida já terminou.');
+    }
+    if (room.match.phase !== 'result') {
+      throw new RoomError(
+        'ROUND_NOT_FINISHED',
+        'A rodada atual ainda não terminou.',
+      );
+    }
+
+    const firstPlayer = [...room.players].sort(
+      (left, right) => left.turnOrder - right.turnOrder,
+    )[0];
+    room.match = {
+      activePlayerId: firstPlayer.id,
+      attempts: [],
+      championId: null,
+      countdownEndsAt: null,
+      currentRound: room.match.currentRound + 1,
+      isTiebreak: room.match.currentRound >= room.match.totalRounds,
+      phase: 'ready',
+      targetMs: this.createTarget(),
+      totalRounds: room.match.totalRounds,
+      turnStartedAtMs: null,
+      verifiedPlayerIds: [],
+      winnerIds: [],
+    };
+    room.status = 'playing';
+    return toSnapshot(room);
+  }
+
+  advanceRoundForHost(socketId: string): RoomSnapshot {
+    const code = this.roomBySocket.get(socketId);
+    const room = code ? this.rooms.get(code) : undefined;
+    if (!room) throw new RoomError('ROOM_NOT_FOUND', 'Sala não encontrada.');
+    const player = room.players.find(
+      (candidate) => candidate.socketId === socketId,
+    );
+    if (!player?.isHost) {
+      throw new RoomError(
+        'HOST_ONLY',
+        'Somente o host pode iniciar a próxima rodada.',
+      );
+    }
+    return this.advanceRound(room.code);
+  }
+
+  private getActiveTurn(socketId: string): {
+    player: InternalPlayer;
+    room: InternalRoom;
+  } {
+    const code = this.roomBySocket.get(socketId);
+    const room = code ? this.rooms.get(code) : undefined;
+    if (!room || room.status !== 'playing' || !room.match) {
+      throw new RoomError(
+        'GAME_NOT_RUNNING',
+        'A partida não está em andamento.',
+      );
+    }
+    const player = room.players.find(
+      (candidate) => candidate.socketId === socketId,
+    );
+    if (!player)
+      throw new RoomError('PLAYER_NOT_FOUND', 'Jogador não encontrado.');
+    return { player, room };
   }
 
   private assertSocketAvailable(socketId: string) {
@@ -286,8 +564,23 @@ function normalizeNickname(value: string): string {
 
 function toSnapshot(room: InternalRoom): RoomSnapshot {
   return {
+    autoAdvance: room.autoAdvance,
     code: room.code,
-    match: room.match,
+    match: room.match
+      ? {
+          activePlayerId: room.match.activePlayerId,
+          attempts: room.match.attempts,
+          championId: room.match.championId,
+          countdownEndsAt: room.match.countdownEndsAt,
+          currentRound: room.match.currentRound,
+          isTiebreak: room.match.isTiebreak,
+          phase: room.match.phase,
+          targetMs: room.match.targetMs,
+          totalRounds: room.match.totalRounds,
+          verifiedPlayerIds: room.match.verifiedPlayerIds,
+          winnerIds: room.match.winnerIds,
+        }
+      : null,
     maxPlayers: room.maxPlayers,
     mode: room.mode,
     players: room.players.map((player) => ({

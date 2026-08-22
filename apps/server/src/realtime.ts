@@ -72,9 +72,105 @@ export function registerRealtime(app: FastifyInstance) {
       }
     });
 
+    socket.on(SocketEvents.ROOM_AUTO_ADVANCE, (enabled, acknowledge) => {
+      try {
+        const room = rooms.setAutoAdvance(socket.id, enabled);
+        acknowledge({ ok: true, room });
+        io.to(room.code).emit(SocketEvents.ROOM_STATE, room);
+        if (enabled && room.status === 'results') {
+          setTimeout(() => {
+            try {
+              const nextRoom = rooms.advanceRound(room.code);
+              io.to(nextRoom.code).emit(SocketEvents.ROOM_STATE, nextRoom);
+            } catch {
+              // The room may have advanced or closed meanwhile.
+            }
+          }, 4_000);
+        }
+      } catch (error) {
+        acknowledge(toRoomError(error));
+      }
+    });
+
     socket.on(SocketEvents.GAME_START, (acknowledge) => {
       try {
         const room = rooms.start(socket.id);
+        acknowledge({ ok: true, room });
+        io.to(room.code).emit(SocketEvents.ROOM_STATE, room);
+      } catch (error) {
+        acknowledge(toRoomError(error));
+      }
+    });
+
+    socket.on(SocketEvents.ROUND_START, (acknowledge) => {
+      try {
+        const room = rooms.startTurn(socket.id);
+        acknowledge({ ok: true, room });
+        io.to(room.code).emit(SocketEvents.ROOM_STATE, room);
+        const activePlayerId = room.match?.activePlayerId;
+        if (activePlayerId) {
+          setTimeout(() => {
+            try {
+              const timingRoom = rooms.beginTiming(room.code, activePlayerId);
+              io.to(timingRoom.code).emit(SocketEvents.ROOM_STATE, timingRoom);
+              const limitMs = (timingRoom.match?.targetMs ?? 0) * 2;
+              setTimeout(() => {
+                try {
+                  const expiredRoom = rooms.expireTurn(
+                    timingRoom.code,
+                    activePlayerId,
+                  );
+                  io.to(expiredRoom.code).emit(
+                    SocketEvents.ROOM_STATE,
+                    expiredRoom,
+                  );
+                } catch {
+                  // The player may have stopped before reaching the limit.
+                }
+              }, limitMs);
+            } catch {
+              // The turn may have been interrupted while counting down.
+            }
+          }, 3_000);
+        }
+      } catch (error) {
+        acknowledge(toRoomError(error));
+      }
+    });
+
+    socket.on(SocketEvents.ROUND_STOP, (acknowledge) => {
+      try {
+        const room = rooms.stopTurn(socket.id);
+        acknowledge({ ok: true, room });
+        io.to(room.code).emit(SocketEvents.ROOM_STATE, room);
+      } catch (error) {
+        acknowledge(toRoomError(error));
+      }
+    });
+
+    socket.on(SocketEvents.ROUND_VERIFY, (acknowledge) => {
+      try {
+        const room = rooms.verifyTime(socket.id);
+        acknowledge({ ok: true, room });
+        io.to(room.code).emit(SocketEvents.ROOM_STATE, room);
+        if (room.autoAdvance && room.status === 'results') {
+          setTimeout(() => {
+            try {
+              const nextRoom = rooms.advanceRound(room.code);
+              io.to(nextRoom.code).emit(SocketEvents.ROOM_STATE, nextRoom);
+            } catch {
+              // The room may have been closed while showing the result.
+            }
+          }, 4_000);
+        }
+      } catch (error) {
+        acknowledge(toRoomError(error));
+      }
+    });
+
+    socket.on(SocketEvents.ROUND_NEXT, (acknowledge) => {
+      try {
+        const room = rooms.advanceRoundForHost(socket.id);
         acknowledge({ ok: true, room });
         io.to(room.code).emit(SocketEvents.ROOM_STATE, room);
       } catch (error) {

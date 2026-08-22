@@ -118,14 +118,81 @@ describe('RoomManager', () => {
     expect(room.status).toBe('playing');
     expect(room.match).toEqual({
       activePlayerId: room.players[0].id,
+      attempts: [],
+      championId: null,
+      countdownEndsAt: null,
       currentRound: 1,
       isTiebreak: false,
+      phase: 'ready',
       targetMs: 7_000,
       totalRounds: 5,
+      verifiedPlayerIds: [],
+      winnerIds: [],
     });
     expect(() => manager.start('socket-2')).toThrow(
       'Somente o host pode iniciar a partida.',
     );
+  });
+
+  it('measures each turn on the server and advances to the next player', () => {
+    let now = 1_000;
+    const manager = new RoomManager(
+      () => 'TURNS',
+      () => 7_000,
+      () => now,
+    );
+    manager.create({ ...roomOptions, mode: 'points' }, 'socket-1');
+    manager.join({ code: 'TURNS', nickname: 'Ana' }, 'socket-2');
+    manager.setReady('socket-2', true);
+    const game = manager.start('socket-1');
+
+    expect(() => manager.startTurn('socket-2')).toThrow('Aguarde a sua vez.');
+    expect(manager.startTurn('socket-1').match).toMatchObject({
+      countdownEndsAt: 4_000,
+      phase: 'countdown',
+    });
+    now = 4_000;
+    expect(manager.beginTiming('TURNS', game.players[0].id).match?.phase).toBe(
+      'timing',
+    );
+    now = 11_020;
+    const afterHost = manager.stopTurn('socket-1');
+
+    expect(afterHost.match).toMatchObject({
+      activePlayerId: afterHost.players[1].id,
+      attempts: [{ elapsedMs: 7_020, playerId: afterHost.players[0].id }],
+      phase: 'ready',
+    });
+    manager.startTurn('socket-2');
+    now = 14_020;
+    manager.beginTiming('TURNS', afterHost.players[1].id);
+    now = 21_010;
+    expect(manager.stopTurn('socket-2').match).toMatchObject({
+      phase: 'verification',
+    });
+    expect(manager.verifyTime('socket-1').match).toMatchObject({
+      phase: 'verification',
+      verifiedPlayerIds: [afterHost.players[0].id],
+    });
+    expect(() => manager.verifyTime('socket-1')).toThrow(
+      'Você já verificou o tempo nesta rodada.',
+    );
+    const result = manager.verifyTime('socket-2');
+    expect(result.status).toBe('results');
+    expect(result.match).toMatchObject({
+      phase: 'result',
+      winnerIds: [result.players[1].id],
+    });
+    expect(result.players[1].score).toBe(1);
+    const nextRound = manager.advanceRound('TURNS');
+    expect(nextRound.match).toMatchObject({
+      attempts: [],
+      currentRound: 2,
+      phase: 'ready',
+      verifiedPlayerIds: [],
+      winnerIds: [],
+    });
+    expect(nextRound.players[1].score).toBe(1);
   });
 
   it('requires every guest to be ready before the host starts', () => {
@@ -141,5 +208,44 @@ describe('RoomManager', () => {
     );
     expect(manager.setReady('socket-2', true).players[1].isReady).toBe(true);
     expect(manager.start('socket-1').status).toBe('playing');
+  });
+
+  it('automatically closes a turn at double the target', () => {
+    let now = 1_000;
+    const manager = new RoomManager(
+      () => 'LIMIT',
+      () => 7_000,
+      () => now,
+    );
+    manager.create({ ...roomOptions, mode: 'points' }, 'socket-1');
+    manager.join({ code: 'LIMIT', nickname: 'Ana' }, 'socket-2');
+    manager.setReady('socket-2', true);
+    const game = manager.start('socket-1');
+    manager.startTurn('socket-1');
+    now = 4_000;
+    manager.beginTiming('LIMIT', game.players[0].id);
+
+    const expired = manager.expireTurn('LIMIT', game.players[0].id);
+
+    expect(expired.match).toMatchObject({
+      activePlayerId: game.players[1].id,
+      attempts: [{ elapsedMs: 14_000, playerId: game.players[0].id }],
+      phase: 'ready',
+    });
+    expect(() => manager.expireTurn('LIMIT', game.players[0].id)).toThrow(
+      'O cronômetro não está rodando.',
+    );
+  });
+
+  it('keeps manual advance as default and lets only the host enable automatic advance', () => {
+    const manager = new RoomManager(() => 'AUTO1');
+    const created = manager.create(roomOptions, 'socket-1');
+    manager.join({ code: 'AUTO1', nickname: 'Ana' }, 'socket-2');
+
+    expect(created.room.autoAdvance).toBe(false);
+    expect(() => manager.setAutoAdvance('socket-2', true)).toThrow(
+      'Somente o host pode alterar o início automático.',
+    );
+    expect(manager.setAutoAdvance('socket-1', true).autoAdvance).toBe(true);
   });
 });

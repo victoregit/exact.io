@@ -11,6 +11,15 @@ export function getLocalDateKey(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+export function getSaoPauloDateKey(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+  }).format(date);
+}
+
 export function updateDailyResult(
   current: DailyResult | null,
   candidate: DailyResult,

@@ -14,7 +14,7 @@ Uma rodada apresenta o alvo, executa uma contagem regressiva e oculta todas as r
 - Vitest para testes automatizados
 - ESLint e Prettier para qualidade de código
 
-O foco atual é exclusivamente single-player. PostgreSQL, Prisma, Socket.IO, multiplayer e sistemas competitivos permanecem fora do escopo até a experiência Solo estar sólida.
+O Solo, o Daily e a base multiplayer estão ativos. As salas usam Socket.IO e o próximo eixo de implementação é persistir rankings globais no Postgres do Supabase.
 
 ## Arquitetura
 
@@ -80,11 +80,20 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 - [x] Regra Verificar Tempo — um uso por jogador em cada rodada
 - [x] Início sincronizado — host inicia, alvo compartilhado e primeiro turno definido pelo servidor
 - [x] Prontidão da sala — convidados marcam Ready e o host libera o início
-- [ ] Partidas privadas — início, turnos, desafios e placar
-- [ ] Ranking diário global — requer persistência no servidor
+- [x] Turnos cronometrados — medição no servidor e avanço sincronizado da ordem
+- [x] Verificação sincronizada — um uso por jogador, resultado e ponto após todos confirmarem
+- [x] Avanço configurável — host inicia a próxima rodada ou ativa o modo automático
+- [x] Contagem por turno — alvo visível, preparação 3–2–1 e cronômetro iniciado pelo servidor
+- [x] Limite do turno — encerramento automático ao atingir alvo × 2
+- [x] Schema de rankings — melhor diário e agregações semanal/mensal
+- [ ] Concluir partidas privadas — desafio, eliminação e reconexão
+- [x] API de ranking — gravação validada e consultas por período
+- [x] Tela de ranking — abas Diário, Semanal e Mensal
+- [x] Integração Solo → ranking — nickname local e envio automático do melhor Daily
+- [ ] Deploy Render + Supabase — variáveis, migrations e observabilidade
 - [ ] Polimento Solo contínuo — mobile e acessibilidade
-- [ ] Futuro — Multiplayer, competição e demais modos
+- [ ] Escala multiplayer — estado compartilhado para múltiplas instâncias
 
 ## Status atual
 
-A sessão Solo e o Daily permanecem funcionais. O multiplayer agora possui lobby privado em memória, código de convite, nickname, capacidade de 2–5 jogadores, modos Pontos/Eliminatório/Duplas, ordem sincronizada e transferência de host. No modo Duplas, A e B enfrentam C e D, os turnos seguem A → C → B → D e o jogador mais próximo dá um ponto à sua dupla. Início de partida e regras competitivas entram na próxima etapa.
+A sessão Solo e o Daily permanecem funcionais. O multiplayer possui lobby privado em memória, Ready, turnos cronometrados, verificação, placar e modos Pontos/Eliminatório/Duplas. O schema do Supabase preserva somente o melhor resultado diário de cada jogador; os rankings semanal e mensal somam esses melhores resultados diários. Consulte `docs/ranking-architecture.md` para o desenho da implantação.
