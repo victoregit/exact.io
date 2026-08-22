@@ -69,10 +69,22 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 - [x] Fase 0 — Fundação do projeto
 - [x] Fase 1 — Protótipo Solo
 - [x] Fase 2 — Sistema de pontuação
-- [x] Fase 3 — Sessão Solo de cinco rodadas
-- [ ] Polimento Solo — UX, mobile, áudio e acessibilidade
+- [x] Fase 3 — Sessão Solo de cinco rodadas (melhor resultado de cinco)
+- [x] Recordes locais — score, precisão e partidas jogadas
+- [x] Daily local — mesmos cinco alvos e melhor resultado do dia
+- [x] Polimento Solo inicial — áudio, preferência de som e feedback visual
+- [x] Fundação em tempo real — Socket.IO e eventos compartilhados
+- [x] Lobby de salas privadas — criação, convite e entrada por código
+- [x] Modo Duplas 2v2 — equipes AB/CD e turnos A → C → B → D
+- [x] Regras competitivas — fechamento quando todos jogam ou em alvo × 2, sem campeão antecipado e desempate extra
+- [x] Regra Verificar Tempo — um uso por jogador em cada rodada
+- [x] Início sincronizado — host inicia, alvo compartilhado e primeiro turno definido pelo servidor
+- [x] Prontidão da sala — convidados marcam Ready e o host libera o início
+- [ ] Partidas privadas — início, turnos, desafios e placar
+- [ ] Ranking diário global — requer persistência no servidor
+- [ ] Polimento Solo contínuo — mobile e acessibilidade
 - [ ] Futuro — Multiplayer, competição e demais modos
 
 ## Status atual
 
-A Fase 3 está implementada: cada partida Solo possui cinco rodadas, pontuação acumulada de até 5.000 pontos e resumo final com erro médio, melhor rodada, pior rodada, Perfects e desempenho individual das cinco tentativas.
+A sessão Solo e o Daily permanecem funcionais. O multiplayer agora possui lobby privado em memória, código de convite, nickname, capacidade de 2–5 jogadores, modos Pontos/Eliminatório/Duplas, ordem sincronizada e transferência de host. No modo Duplas, A e B enfrentam C e D, os turnos seguem A → C → B → D e o jogador mais próximo dá um ponto à sua dupla. Início de partida e regras competitivas entram na próxima etapa.

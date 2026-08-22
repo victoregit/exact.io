@@ -33,6 +33,20 @@ body {
   user-select: none;
 }
 
+@keyframes perfect-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgb(52 211 153 / 0));
+  }
+  45% {
+    filter: drop-shadow(0 0 22px rgb(52 211 153 / 0.3));
+  }
+}
+
+.perfect-result {
+  animation: perfect-glow 900ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -1,6 +1,8 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
 
+import { registerRealtime } from './realtime.js';
+
 export function buildApp() {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
 
@@ -9,6 +11,7 @@ export function buildApp() {
   });
 
   app.get('/health', async () => ({ status: 'ok' as const }));
+  registerRealtime(app);
 
   return app;
 }

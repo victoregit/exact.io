@@ -1,14 +1,26 @@
 'use client';
 
 import {
+  EMPTY_SOLO_RECORDS,
+  type DailyResult,
   type PrecisionLabel,
+  type SoloRecords,
   calculateDifference,
   calculateScore,
   classifyPrecision,
-  generateTargetMs,
+  generateDailyTargetMs,
+  getLocalDateKey,
+  parseDailyResult,
+  parseSoloRecords,
   summarizeSession,
+  updateDailyResult,
+  updateSoloRecords,
 } from '@exact-io/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+
+import { playSound, type SoundCue } from './audio';
+import { useRealtimeStatus } from './use-realtime-status';
 
 type GameState =
   'idle' | 'target' | 'countdown' | 'playing' | 'result' | 'summary';
@@ -25,6 +37,9 @@ interface RoundResult {
 const COUNTDOWN_FROM = 3;
 const TARGET_PREVIEW_MS = 2_500;
 const TOTAL_ROUNDS = 5;
+const RECORDS_STORAGE_KEY = 'exact:solo-records:v2';
+const SOUND_STORAGE_KEY = 'exact:sound-enabled:v1';
+const DAILY_STORAGE_KEY = 'exact:daily-result:v1';
 
 const precisionStyles: Record<PrecisionLabel, string> = {
   PERFECT: 'text-emerald-300 drop-shadow-[0_0_24px_rgba(52,211,153,0.85)]',
@@ -45,16 +60,80 @@ function formatTarget(milliseconds: number): string {
 }
 
 export default function HomePage() {
+  const realtimeStatus = useRealtimeStatus();
   const [gameState, setGameState] = useState<GameState>('idle');
   const [targetMs, setTargetMs] = useState(0);
   const [countdown, setCountdown] = useState(COUNTDOWN_FROM);
   const [result, setResult] = useState<RoundResult | null>(null);
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
+  const [records, setRecords] = useState<SoloRecords>(EMPTY_SOLO_RECORDS);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [dailyResult, setDailyResult] = useState<DailyResult | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
+  const sessionSavedRef = useRef(false);
+  const nextRoundIndexRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      setRecords(
+        parseSoloRecords(window.localStorage.getItem(RECORDS_STORAGE_KEY)),
+      );
+    } catch {
+      setRecords(EMPTY_SOLO_RECORDS);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const stored = parseDailyResult(
+        window.localStorage.getItem(DAILY_STORAGE_KEY),
+      );
+      setDailyResult(stored?.date === getLocalDateKey() ? stored : null);
+    } catch {
+      setDailyResult(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      setSoundEnabled(
+        window.localStorage.getItem(SOUND_STORAGE_KEY) !== 'false',
+      );
+    } catch {
+      setSoundEnabled(true);
+    }
+  }, []);
+
+  const sound = useCallback(
+    (cue: SoundCue) => {
+      if (!soundEnabled) return;
+
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      void context.resume().then(() => playSound(context, cue));
+    },
+    [soundEnabled],
+  );
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((enabled) => {
+      const nextEnabled = !enabled;
+      try {
+        window.localStorage.setItem(SOUND_STORAGE_KEY, String(nextEnabled));
+      } catch {
+        // Sound preference remains available for the current page session.
+      }
+      return nextEnabled;
+    });
+  }, []);
 
   const beginRound = useCallback(() => {
-    setTargetMs(generateTargetMs());
+    setTargetMs(
+      generateDailyTargetMs(getLocalDateKey(), nextRoundIndexRef.current),
+    );
+    nextRoundIndexRef.current += 1;
     setResult(null);
     setCountdown(COUNTDOWN_FROM);
     stoppedRef.current = false;
@@ -63,9 +142,16 @@ export default function HomePage() {
   }, []);
 
   const beginSession = useCallback(() => {
+    if (soundEnabled) {
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      void context.resume();
+    }
+    nextRoundIndexRef.current = 0;
+    sessionSavedRef.current = false;
     setRoundResults([]);
     beginRound();
-  }, [beginRound]);
+  }, [beginRound, soundEnabled]);
 
   const stopRound = useCallback(() => {
     if (stoppedRef.current || startedAtRef.current === null) return;
@@ -86,17 +172,51 @@ export default function HomePage() {
 
     setResult(roundResult);
     setRoundResults((results) => [...results, roundResult]);
+    sound(roundResult.precision === 'PERFECT' ? 'perfect' : 'result');
     setGameState('result');
-  }, [targetMs]);
+  }, [sound, targetMs]);
 
   const continueSession = useCallback(() => {
     if (roundResults.length >= TOTAL_ROUNDS) {
+      if (sessionSavedRef.current) {
+        setGameState('summary');
+        return;
+      }
+
+      sessionSavedRef.current = true;
+      const sessionSummary = summarizeSession(roundResults);
+      const bestSessionRound = roundResults[sessionSummary.bestRoundIndex];
+      const nextRecords = updateSoloRecords(records, {
+        averageDifferenceMs: sessionSummary.averageDifferenceMs,
+        bestScore: sessionSummary.bestScore,
+        bestDifferenceMs: bestSessionRound.differenceMs,
+      });
+      const nextDailyResult = updateDailyResult(dailyResult, {
+        bestDifferenceMs: bestSessionRound.differenceMs,
+        bestScore: sessionSummary.bestScore,
+        date: getLocalDateKey(),
+      });
+
+      setRecords(nextRecords);
+      setDailyResult(nextDailyResult);
+      try {
+        window.localStorage.setItem(
+          RECORDS_STORAGE_KEY,
+          JSON.stringify(nextRecords),
+        );
+        window.localStorage.setItem(
+          DAILY_STORAGE_KEY,
+          JSON.stringify(nextDailyResult),
+        );
+      } catch {
+        // The current session still works when browser storage is unavailable.
+      }
       setGameState('summary');
       return;
     }
 
     beginRound();
-  }, [beginRound, roundResults.length]);
+  }, [beginRound, dailyResult, records, roundResults]);
 
   useEffect(() => {
     if (gameState !== 'target') return;
@@ -110,6 +230,8 @@ export default function HomePage() {
   useEffect(() => {
     if (gameState !== 'countdown') return;
 
+    sound('countdown');
+
     const timeout = window.setTimeout(() => {
       if (countdown > 1) {
         setCountdown((value) => value - 1);
@@ -117,11 +239,12 @@ export default function HomePage() {
       }
 
       startedAtRef.current = performance.now();
+      sound('go');
       setGameState('playing');
     }, 1_000);
 
     return () => window.clearTimeout(timeout);
-  }, [countdown, gameState]);
+  }, [countdown, gameState, sound]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -154,14 +277,45 @@ export default function HomePage() {
               EXACT
             </p>
             <p className="mt-1 text-[10px] tracking-[0.22em] text-zinc-600">
-              SINGLE PLAYER
+              DAILY · SINGLE PLAYER
             </p>
           </div>
-          <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold tracking-widest text-zinc-500">
-            {gameState === 'summary'
-              ? 'FINAL'
-              : `RODADA ${currentRound}/${TOTAL_ROUNDS}`}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              aria-label={`Servidor ${realtimeStatus}`}
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-[9px] font-semibold tracking-widest text-zinc-500"
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  realtimeStatus === 'online'
+                    ? 'bg-emerald-400'
+                    : realtimeStatus === 'connecting'
+                      ? 'bg-amber-400'
+                      : 'bg-zinc-600'
+                }`}
+              />
+              {realtimeStatus === 'online'
+                ? 'ONLINE'
+                : realtimeStatus === 'connecting'
+                  ? 'CONECTANDO'
+                  : 'OFFLINE'}
+            </span>
+            <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold tracking-widest text-zinc-500">
+              {gameState === 'summary'
+                ? 'FINAL'
+                : `RODADA ${currentRound}/${TOTAL_ROUNDS}`}
+            </span>
+            <button
+              aria-label={soundEnabled ? 'Desativar sons' : 'Ativar sons'}
+              aria-pressed={soundEnabled}
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/10 text-sm text-zinc-500 transition hover:border-white/20 hover:text-zinc-200"
+              onClick={toggleSound}
+              title={soundEnabled ? 'Desativar sons' : 'Ativar sons'}
+              type="button"
+            >
+              {soundEnabled ? '♪' : '×'}
+            </button>
+          </div>
         </header>
 
         <div className="flex flex-1 flex-col items-center justify-center text-center">
@@ -184,6 +338,19 @@ export default function HomePage() {
               >
                 INICIAR
               </button>
+              {records.gamesPlayed > 0 && (
+                <p className="mt-5 text-xs tracking-widest text-zinc-600">
+                  RECORDE {records.highScore.toLocaleString('pt-BR')} ·{' '}
+                  {records.gamesPlayed}{' '}
+                  {records.gamesPlayed === 1 ? 'PARTIDA' : 'PARTIDAS'}
+                </p>
+              )}
+              <Link
+                className="mt-7 text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
+                href="/room"
+              >
+                SALA PRIVADA
+              </Link>
             </>
           )}
 
@@ -220,8 +387,7 @@ export default function HomePage() {
             >
               <div className="mb-auto mt-auto">
                 <span className="inline-flex items-center gap-3 text-sm font-bold tracking-[0.35em] text-emerald-400">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />{' '}
-                  AGORA
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" /> AGORA
                 </span>
                 <p className="mt-5 text-3xl font-black tracking-tight text-white">
                   Sinta o tempo.
@@ -242,7 +408,10 @@ export default function HomePage() {
           )}
 
           {gameState === 'result' && result && (
-            <div className="w-full" aria-live="polite">
+            <div
+              className={`w-full ${result.precision === 'PERFECT' ? 'perfect-result' : ''}`}
+              aria-live="polite"
+            >
               <p className="text-xs font-bold tracking-[0.38em] text-zinc-500">
                 DIFERENÇA
               </p>
@@ -298,11 +467,27 @@ export default function HomePage() {
                 PARTIDA CONCLUÍDA
               </p>
               <p className="mt-4 font-mono text-6xl font-black tracking-tight text-white sm:text-7xl">
-                {summary.totalScore.toLocaleString('pt-BR')}
+                {summary.bestScore.toLocaleString('pt-BR')}
               </p>
               <p className="mt-2 text-[10px] tracking-[0.3em] text-zinc-600">
-                DE 5.000 PONTOS
+                MELHOR RESULTADO DE 5 · MÁXIMO 1.000
               </p>
+
+              {dailyResult && (
+                <div className="mt-6 flex items-center justify-between rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-5 py-4 text-left">
+                  <div>
+                    <p className="text-[9px] font-bold tracking-[0.25em] text-emerald-500/70">
+                      RANKING DIÁRIO LOCAL
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-zinc-300">
+                      #1 VOCÊ
+                    </p>
+                  </div>
+                  <p className="font-mono text-2xl font-black text-emerald-300">
+                    {dailyResult.bestScore}
+                  </p>
+                </div>
+              )}
 
               <div className="mt-8 grid grid-cols-2 gap-3">
                 <ResultMetric
@@ -347,6 +532,30 @@ export default function HomePage() {
                 ))}
               </div>
 
+              <div className="mt-7 border-t border-white/[0.07] pt-6">
+                <p className="text-[10px] font-bold tracking-[0.3em] text-zinc-600">
+                  RECORDES LOCAIS
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 text-left">
+                  <RecordMetric
+                    label="MAIOR SCORE"
+                    value={records.highScore.toLocaleString('pt-BR')}
+                  />
+                  <RecordMetric
+                    label="PARTIDAS"
+                    value={String(records.gamesPlayed)}
+                  />
+                  <RecordMetric
+                    label="MENOR ERRO"
+                    value={formatOptionalSeconds(records.bestErrorMs)}
+                  />
+                  <RecordMetric
+                    label="MELHOR MÉDIA"
+                    value={formatOptionalSeconds(records.bestAverageMs)}
+                  />
+                </div>
+              </div>
+
               <button
                 className="mt-8 w-full cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-sm font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98]"
                 onClick={beginSession}
@@ -377,4 +586,19 @@ function ResultMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-2 font-mono text-xl font-bold text-zinc-200">{value}</p>
     </div>
   );
+}
+
+function RecordMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[9px] font-bold tracking-[0.2em] text-zinc-700">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-lg font-bold text-zinc-300">{value}</p>
+    </div>
+  );
+}
+
+function formatOptionalSeconds(milliseconds: number | null): string {
+  return milliseconds === null ? '—' : formatSeconds(milliseconds);
 }

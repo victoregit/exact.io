@@ -4,6 +4,7 @@ import {
   TARGET_TIME,
   calculateDifference,
   classifyPrecision,
+  generateDailyTargetMs,
   generateTargetMs,
 } from './timing';
 
@@ -41,5 +42,20 @@ describe('timing', () => {
 
     expect(targetMs).not.toBe(TARGET_TIME.minMs);
     expect(targetMs % 100).not.toBe(0);
+  });
+
+  it('generates stable targets for each daily round', () => {
+    const firstRun = Array.from({ length: 5 }, (_, index) =>
+      generateDailyTargetMs('2026-08-22', index),
+    );
+    const secondRun = Array.from({ length: 5 }, (_, index) =>
+      generateDailyTargetMs('2026-08-22', index),
+    );
+
+    expect(secondRun).toEqual(firstRun);
+    expect(new Set(firstRun).size).toBeGreaterThan(1);
+    expect(
+      firstRun.every((target) => target >= 3_000 && target <= 10_000),
+    ).toBe(true);
   });
 });

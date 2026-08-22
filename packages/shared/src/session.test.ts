@@ -14,9 +14,9 @@ describe('summarizeSession', () => {
   it('summarizes a five-round session', () => {
     expect(summarizeSession(rounds)).toEqual({
       averageDifferenceMs: 95.2,
+      bestScore: 970,
       bestRoundIndex: 3,
       perfects: 2,
-      totalScore: 3_580,
       worstRoundIndex: 4,
     });
   });
@@ -24,9 +24,9 @@ describe('summarizeSession', () => {
   it('returns a safe empty summary', () => {
     expect(summarizeSession([])).toEqual({
       averageDifferenceMs: 0,
+      bestScore: 0,
       bestRoundIndex: -1,
       perfects: 0,
-      totalScore: 0,
       worstRoundIndex: -1,
     });
   });

@@ -38,3 +38,26 @@ export function generateTargetMs(random: () => number = Math.random): number {
 
   return targetMs;
 }
+
+export function generateDailyTargetMs(
+  dateKey: string,
+  roundIndex: number,
+): number {
+  return generateTargetMs(createSeededRandom(`${dateKey}:${roundIndex}`));
+}
+
+function createSeededRandom(seed: string): () => number {
+  let state = 2_166_136_261;
+  for (const character of seed) {
+    state ^= character.charCodeAt(0);
+    state = Math.imul(state, 16_777_619);
+  }
+
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}

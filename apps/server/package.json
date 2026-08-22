@@ -14,13 +14,15 @@
     "@exact-io/shared": "workspace:*",
     "@fastify/cors": "^10.1.0",
     "dotenv": "^16.6.1",
-    "fastify": "^5.5.0"
+    "fastify": "^5.5.0",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.34.0",
     "@types/node": "^22.18.0",
     "eslint": "^9.34.0",
     "globals": "^16.3.0",
+    "socket.io-client": "^4.8.3",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.41.0",

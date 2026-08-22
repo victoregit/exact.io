@@ -1,4 +1,4 @@
-import type { PrecisionLabel } from './timing';
+import type { PrecisionLabel } from './timing.js';
 
 export interface SessionRound {
   differenceMs: number;
@@ -8,9 +8,9 @@ export interface SessionRound {
 
 export interface SessionSummary {
   averageDifferenceMs: number;
+  bestScore: number;
   bestRoundIndex: number;
   perfects: number;
-  totalScore: number;
   worstRoundIndex: number;
 }
 
@@ -18,9 +18,9 @@ export function summarizeSession(rounds: SessionRound[]): SessionSummary {
   if (rounds.length === 0) {
     return {
       averageDifferenceMs: 0,
+      bestScore: 0,
       bestRoundIndex: -1,
       perfects: 0,
-      totalScore: 0,
       worstRoundIndex: -1,
     };
   }
@@ -29,11 +29,11 @@ export function summarizeSession(rounds: SessionRound[]): SessionSummary {
   let worstRoundIndex = 0;
   let differenceTotal = 0;
   let perfects = 0;
-  let totalScore = 0;
+  let bestScore = 0;
 
   rounds.forEach((round, index) => {
     differenceTotal += round.differenceMs;
-    totalScore += round.score;
+    bestScore = Math.max(bestScore, round.score);
     if (round.precision === 'PERFECT') perfects += 1;
     if (round.differenceMs < rounds[bestRoundIndex].differenceMs)
       bestRoundIndex = index;
@@ -43,9 +43,9 @@ export function summarizeSession(rounds: SessionRound[]): SessionSummary {
 
   return {
     averageDifferenceMs: differenceTotal / rounds.length,
+    bestScore,
     bestRoundIndex,
     perfects,
-    totalScore,
     worstRoundIndex,
   };
 }
