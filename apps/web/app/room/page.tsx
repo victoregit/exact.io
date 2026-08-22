@@ -75,9 +75,17 @@ export default function RoomPage() {
       const activePlayer = room?.players.find(
         (player) => player.id === room.match?.activePlayerId,
       );
+      const me = room?.players.find(
+        (player) =>
+          player.nickname.toLocaleLowerCase() ===
+          nickname.trim().toLocaleLowerCase(),
+      );
       const isMyTurn =
-        activePlayer?.nickname.toLocaleLowerCase() ===
-        nickname.trim().toLocaleLowerCase();
+        room?.mode === 'points'
+          ? !room.match?.attempts.some(
+              (attempt) => attempt.playerId === me?.id,
+            )
+          : activePlayer?.id === me?.id;
       if (!isMyTurn || !room?.match) return;
 
       if (room.match.phase === 'ready') {
@@ -197,7 +205,12 @@ export default function RoomPage() {
   }
 
   function runTurnAction(
-    event: 'round:next' | 'round:start' | 'round:stop' | 'round:verify',
+    event:
+      | 'round:challenge'
+      | 'round:next'
+      | 'round:start'
+      | 'round:stop'
+      | 'round:verify',
   ) {
     setError('');
     socketRef.current?.emit(event, (response) => {
@@ -436,7 +449,9 @@ export default function RoomPage() {
             {room.match ? (
               <div className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-6">
                 <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {room.players.map((player) => {
+                  {[...room.players]
+                    .sort((left, right) => left.turnOrder - right.turnOrder)
+                    .map((player) => {
                     const isActive =
                       player.id === room.match?.activePlayerId &&
                       room.match.phase !== 'result';
@@ -450,7 +465,7 @@ export default function RoomPage() {
                         key={player.id}
                       >
                         <p className="text-[9px] font-black tracking-widest text-zinc-600">
-                          {player.slot ?? `#${player.order}`}
+                          {player.slot ?? `#${player.turnOrder}`}
                           {player.isHost ? ' · HOST' : ''}
                         </p>
                         <p className="mt-1 truncate text-xs font-black text-white">
@@ -459,7 +474,15 @@ export default function RoomPage() {
                         <p
                           className={`mt-1 font-mono text-[10px] font-bold ${isActive ? 'text-emerald-300' : 'text-zinc-500'}`}
                         >
-                          {isActive ? 'SUA VEZ' : `${player.score} PT`}
+                          {player.isEliminated
+                            ? 'ELIMINADO'
+                            : isActive
+                              ? 'SUA VEZ'
+                              : room.mode === 'elimination'
+                                ? player.shieldActive
+                                  ? '🛡️ PROTEGIDO'
+                                  : 'SEM PROTEÇÃO'
+                                : `${player.score} PT`}
                         </p>
                       </div>
                     );
@@ -491,26 +514,59 @@ export default function RoomPage() {
                   {(room.match.targetMs / 1000).toFixed(2)}s
                 </p>
                 <p className="mt-4 text-sm text-zinc-400">
-                  VEZ DE{' '}
-                  <strong className="text-white">
-                    {room.players.find(
-                      (player) => player.id === room.match?.activePlayerId,
-                    )?.nickname ?? 'JOGADOR'}
-                  </strong>
+                  {room.mode === 'points' ? (
+                    <strong className="text-white">TODOS JOGAM AGORA</strong>
+                  ) : (
+                    <>
+                      VEZ DE{' '}
+                      <strong className="text-white">
+                        {room.players.find(
+                          (player) => player.id === room.match?.activePlayerId,
+                        )?.nickname ?? 'JOGADOR'}
+                      </strong>
+                    </>
+                  )}
                 </p>
                 <p className="mt-2 text-xs font-bold tracking-widest text-zinc-600">
-                  {room.match.attempts.length}/{room.players.length} JOGARAM
+                  {room.mode === 'points'
+                    ? `${room.match.attempts.length}/${room.players.length} ENVIARAM`
+                    : room.mode === 'duos'
+                    ? `${room.match.attempts.length}/${room.players.length} JOGARAM`
+                    : `${room.match.attempts.length} PASSAGENS`}
                 </p>
                 <p className="mt-3 text-xs text-zinc-600">
-                  A rodada permanece aberta até todos jogarem ou até{' '}
-                  {((room.match.targetMs * 2) / 1000).toFixed(2)}s.
+                  {room.mode === 'points' ? (
+                    <>Todos jogam ao mesmo tempo. O mais próximo ganha +1.</>
+                  ) : room.mode === 'duos' ? (
+                    <>
+                      A rodada permanece aberta até todos jogarem ou até{' '}
+                      {((room.match.targetMs * 2) / 1000).toFixed(2)}s.
+                    </>
+                  ) : (
+                    <>
+                      A batata circula até um desafio ou o limite de{' '}
+                      {((room.match.targetMs * 2) / 1000).toFixed(2)}s.
+                    </>
+                  )}
                 </p>
-                {(room.match.phase === 'ready' ||
-                  room.match.phase === 'timing') &&
-                  room.players
+                {((room.mode === 'points' &&
+                  room.match.phase === 'timing' &&
+                  !room.match.attempts.some(
+                    (attempt) =>
+                      attempt.playerId ===
+                      room.players.find(
+                        (player) =>
+                          player.nickname.toLocaleLowerCase() ===
+                          nickname.trim().toLocaleLowerCase(),
+                      )?.id,
+                  )) ||
+                  ((room.match.phase === 'ready' ||
+                    room.match.phase === 'timing') &&
+                    room.mode !== 'points' &&
+                    room.players
                     .find((player) => player.id === room.match?.activePlayerId)
                     ?.nickname.toLocaleLowerCase() ===
-                    nickname.trim().toLocaleLowerCase() && (
+                    nickname.trim().toLocaleLowerCase())) && (
                     <button
                       className={`mt-6 w-full cursor-pointer rounded-2xl px-6 py-5 text-sm font-black tracking-[0.2em] transition ${
                         room.match.phase === 'timing'
@@ -526,7 +582,41 @@ export default function RoomPage() {
                       }
                       type="button"
                     >
-                      {room.match.phase === 'timing' ? 'PARAR' : 'INICIAR'}
+                      {room.match.phase === 'timing' && room.mode === 'elimination'
+                        ? 'PASSAR'
+                        : room.match.phase === 'timing'
+                          ? 'PARAR'
+                          : 'INICIAR'}
+                    </button>
+                  )}
+                {room.mode !== 'points' &&
+                  room.match.previousPlayerId &&
+                  room.match.phase !== 'result' &&
+                  !room.match.challengedByIds.includes(
+                    room.players.find(
+                      (player) =>
+                        player.nickname.toLocaleLowerCase() ===
+                        nickname.trim().toLocaleLowerCase(),
+                    )?.id ?? '',
+                  ) &&
+                  room.match.previousPlayerId !==
+                    room.players.find(
+                      (player) =>
+                        player.nickname.toLocaleLowerCase() ===
+                        nickname.trim().toLocaleLowerCase(),
+                    )?.id && (
+                    <button
+                      className="mt-3 w-full cursor-pointer rounded-2xl border border-amber-400/50 bg-amber-400/10 px-6 py-4 text-xs font-black tracking-[0.15em] text-amber-300 transition hover:bg-amber-400/20"
+                      onClick={() =>
+                        runTurnAction(SocketEvents.ROUND_CHALLENGE)
+                      }
+                      type="button"
+                    >
+                      DESAFIAR{' '}
+                      {room.players.find(
+                        (player) =>
+                          player.id === room.match?.previousPlayerId,
+                      )?.nickname ?? 'JOGADOR'}
                     </button>
                   )}
                 {(room.match.phase === 'ready' ||
@@ -591,9 +681,18 @@ export default function RoomPage() {
                         ? `${room.players.find((player) => player.id === room.match?.winnerIds[0])?.nickname ?? 'JOGADOR'} VENCEU A RODADA`
                         : 'EMPATE NA RODADA'}
                     </p>
+                    {room.match.resolution && (
+                      <p className="mt-2 text-[10px] font-bold tracking-widest text-zinc-500">
+                        {room.match.resolution === 'limit'
+                          ? 'LIMITE DE 2× ATINGIDO'
+                          : room.match.resolution === 'challenge-correct'
+                            ? 'DESAFIO CORRETO'
+                            : 'DESAFIO INCORRETO'}
+                      </p>
+                    )}
                     <div className="mt-4 space-y-2 text-left text-xs text-zinc-400">
-                      {room.match.attempts.map((attempt) => (
-                        <p key={attempt.playerId}>
+                      {room.match.attempts.map((attempt, index) => (
+                        <p key={`${attempt.playerId}-${index}`}>
                           {room.players.find(
                             (player) => player.id === attempt.playerId,
                           )?.nickname ?? 'Jogador'}{' '}
