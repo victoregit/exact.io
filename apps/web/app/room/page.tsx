@@ -455,6 +455,9 @@ export default function RoomPage() {
                     const isActive =
                       player.id === room.match?.activePlayerId &&
                       room.match.phase !== 'result';
+                    const isCurrentUser =
+                      player.nickname.toLocaleLowerCase() ===
+                      nickname.trim().toLocaleLowerCase();
                     return (
                       <div
                         className={`min-w-0 rounded-xl border px-2 py-3 transition ${
@@ -476,8 +479,10 @@ export default function RoomPage() {
                         >
                           {player.isEliminated
                             ? 'ELIMINADO'
-                            : isActive
+                            : isActive && isCurrentUser
                               ? 'SUA VEZ'
+                              : isActive
+                                ? 'JOGANDO'
                               : room.mode === 'elimination'
                                 ? player.shieldActive
                                   ? '🛡️ PROTEGIDO'
@@ -589,9 +594,9 @@ export default function RoomPage() {
                           : 'INICIAR'}
                     </button>
                   )}
-                {room.mode === 'elimination' &&
+                {(room.mode === 'elimination' || room.mode === 'duos') &&
                   room.match.previousPlayerId &&
-                  room.match.phase !== 'result' &&
+                  room.match.phase === 'ready' &&
                   !room.match.challengedByIds.includes(
                     room.players.find(
                       (player) =>
@@ -604,7 +609,16 @@ export default function RoomPage() {
                       (player) =>
                         player.nickname.toLocaleLowerCase() ===
                         nickname.trim().toLocaleLowerCase(),
-                    )?.id && (
+                    )?.id &&
+                  (room.mode !== 'duos' ||
+                    room.players.find(
+                      (player) =>
+                        player.nickname.toLocaleLowerCase() ===
+                        nickname.trim().toLocaleLowerCase(),
+                    )?.team !==
+                      room.players.find(
+                        (player) => player.id === room.match?.previousPlayerId,
+                      )?.team) && (
                     <button
                       className="mt-3 w-full cursor-pointer rounded-2xl border border-amber-400/50 bg-amber-400/10 px-6 py-4 text-xs font-black tracking-[0.15em] text-amber-300 transition hover:bg-amber-400/20"
                       onClick={() =>
@@ -612,12 +626,20 @@ export default function RoomPage() {
                       }
                       type="button"
                     >
-                      DESAFIAR{' '}
-                      {room.players.find(
-                        (player) =>
-                          player.id === room.match?.previousPlayerId,
-                      )?.nickname ?? 'JOGADOR'}
+                      {room.mode === 'duos' && room.match.challengedByIds.length > 0
+                        ? 'CONFIRMAR DESAFIO'
+                        : `DESAFIAR ${room.players.find(
+                            (player) =>
+                              player.id === room.match?.previousPlayerId,
+                          )?.nickname ?? 'JOGADOR'}`}
                     </button>
+                  )}
+                {room.mode === 'duos' &&
+                  room.match.phase === 'ready' &&
+                  room.match.challengedByIds.length > 0 && (
+                    <p className="mt-3 text-center text-[10px] font-bold tracking-widest text-amber-300">
+                      1/2 CONFIRMAÇÕES DO DESAFIO · AGUARDANDO O PARCEIRO
+                    </p>
                   )}
                 {(room.match.phase === 'ready' ||
                   room.match.phase === 'timing') && (
