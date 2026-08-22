@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 import pg from 'pg';
 
+import { createPostgresPoolConfig } from './postgres.js';
+
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
@@ -12,7 +14,10 @@ if (!connectionString) {
 const migrationsDirectory = fileURLToPath(
   new URL('../../../database/migrations/', import.meta.url),
 );
-const pool = new pg.Pool({ connectionString, max: 1 });
+const pool = new pg.Pool({
+  ...createPostgresPoolConfig(connectionString),
+  max: 1,
+});
 const client = await pool.connect();
 
 try {
