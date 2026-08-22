@@ -25,9 +25,6 @@ create index if not exists solo_daily_scores_day_rank_idx
 create index if not exists solo_daily_scores_player_day_idx
   on public.solo_daily_scores (player_id, played_on desc);
 
-alter table public.ranking_players enable row level security;
-alter table public.solo_daily_scores enable row level security;
-
 create or replace function public.submit_solo_daily_best(
   p_device_key_hash text,
   p_nickname text,
@@ -92,7 +89,7 @@ $$;
 
 revoke all on function public.submit_solo_daily_best(
   text, text, date, integer, integer, integer, integer
-) from public, anon, authenticated;
+) from public;
 
 create or replace view public.ranking_daily
 with (security_invoker = true)
@@ -146,9 +143,3 @@ select
 from public.solo_daily_scores s
 join public.ranking_players p on p.id = s.player_id
 group by period_start, p.id, p.nickname;
-
-revoke all on public.ranking_players from anon, authenticated;
-revoke all on public.solo_daily_scores from anon, authenticated;
-revoke all on public.ranking_daily from anon, authenticated;
-revoke all on public.ranking_weekly from anon, authenticated;
-revoke all on public.ranking_monthly from anon, authenticated;

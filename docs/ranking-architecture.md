@@ -4,7 +4,7 @@
 
 - **Navegador/Next.js:** interface, nickname e uma chave aleatória local do jogador.
 - **Fastify + Socket.IO no Render:** autoridade da partida, medição dos tempos, validação das tentativas, salas e gravação dos resultados.
-- **Postgres no Supabase:** identidade pseudônima, melhor resultado diário e rankings Diário/Semanal/Mensal.
+- **PostgreSQL na Aiven:** identidade pseudônima, melhor resultado diário e rankings Diário/Semanal/Mensal.
 
 O navegador nunca envia uma pontuação pronta para o banco. Ele envia ações ao servidor; o servidor calcula o resultado e grava usando uma credencial disponível apenas no Render.
 
@@ -26,16 +26,15 @@ Navegadores
 Render: Next.js + Fastify/Socket.IO
    │ conexão Postgres protegida
    ▼
-Supabase: ranking_players + solo_daily_scores + views de ranking
+Aiven PostgreSQL: ranking_players + solo_daily_scores + views de ranking
 ```
 
 Na primeira implantação, o Socket.IO roda em uma única instância do Render e mantém as salas em memória. Antes de escalar horizontalmente, as salas e eventos deverão usar um adaptador compartilhado, porque jogadores conectados a instâncias diferentes precisam receber o mesmo estado.
 
 ## Próximas integrações
 
-1. Aplicar a migration no projeto Supabase.
-2. Adicionar `DATABASE_URL` somente ao serviço Fastify no Render.
-3. Criar endpoints de envio do melhor Daily e consulta dos três rankings.
-4. Gerar e salvar a chave local do jogador; enviar apenas seu hash ao banco.
-5. Criar a tela de ranking com abas Diário, Semanal e Mensal.
-6. Adicionar rate limit, validação server-side e auditoria básica contra resultados falsos.
+1. Criar o PostgreSQL gratuito na Aiven e copiar a Service URI.
+2. Informar essa URI como `DATABASE_URL` somente no serviço Fastify do Render.
+3. Aplicar automaticamente as migrations antes de cada deploy da API.
+4. Informar as URLs públicas da API e do frontend nas variáveis solicitadas.
+5. Validar rankings, gravação do Daily e uma sala em dois navegadores.

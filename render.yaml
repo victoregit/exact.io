@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: exact-api
+    runtime: node
+    plan: free
+    branch: develop
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @exact-io/shared build && pnpm --filter @exact-io/server build
+    preDeployCommand: pnpm --filter @exact-io/server migrate
+    startCommand: pnpm --filter @exact-io/server start
+    healthCheckPath: /ready
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22.18.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: WEB_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DEVICE_KEY_SECRET
+        generateValue: true
+
+  - type: web
+    name: exact-web
+    runtime: node
+    plan: free
+    branch: develop
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @exact-io/shared build && pnpm --filter @exact-io/web build
+    startCommand: pnpm --filter @exact-io/web start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22.18.0
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

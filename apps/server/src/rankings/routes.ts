@@ -21,6 +21,9 @@ export function registerRankingRoutes(
 ) {
   app.get<{ Params: { period: string }; Querystring: { limit?: string } }>(
     '/rankings/:period',
+    {
+      config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+    },
     async (request, reply) => {
       if (!repository)
         return reply.code(503).send({ message: 'Ranking indisponível.' });
@@ -50,48 +53,54 @@ export function registerRankingRoutes(
       playedOn?: string;
       roundIndex?: number;
     };
-  }>('/rankings/daily', async (request, reply) => {
-    if (!repository || !secret) {
-      return reply.code(503).send({ message: 'Ranking indisponível.' });
-    }
-    const { deviceKey, elapsedMs, nickname, playedOn, roundIndex } =
-      request.body ?? {};
-    const today = getSaoPauloDate(now());
-    if (
-      typeof deviceKey !== 'string' ||
-      deviceKey.length < 16 ||
-      typeof nickname !== 'string' ||
-      nickname.trim().length < 2 ||
-      nickname.trim().length > 16 ||
-      playedOn !== today ||
-      !Number.isInteger(roundIndex) ||
-      (roundIndex ?? -1) < 0 ||
-      (roundIndex ?? 5) > 4 ||
-      typeof elapsedMs !== 'number' ||
-      !Number.isFinite(elapsedMs) ||
-      elapsedMs < 0 ||
-      elapsedMs > 20_000
-    ) {
-      return reply.code(400).send({ message: 'Resultado inválido.' });
-    }
+  }>(
+    '/rankings/daily',
+    {
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      if (!repository || !secret) {
+        return reply.code(503).send({ message: 'Ranking indisponível.' });
+      }
+      const { deviceKey, elapsedMs, nickname, playedOn, roundIndex } =
+        request.body ?? {};
+      const today = getSaoPauloDate(now());
+      if (
+        typeof deviceKey !== 'string' ||
+        deviceKey.length < 16 ||
+        typeof nickname !== 'string' ||
+        nickname.trim().length < 2 ||
+        nickname.trim().length > 16 ||
+        playedOn !== today ||
+        !Number.isInteger(roundIndex) ||
+        (roundIndex ?? -1) < 0 ||
+        (roundIndex ?? 5) > 4 ||
+        typeof elapsedMs !== 'number' ||
+        !Number.isFinite(elapsedMs) ||
+        elapsedMs < 0 ||
+        elapsedMs > 20_000
+      ) {
+        return reply.code(400).send({ message: 'Resultado inválido.' });
+      }
 
-    const targetMs = generateDailyTargetMs(playedOn, roundIndex as number);
-    const roundedElapsedMs = Math.round(elapsedMs);
-    const differenceMs = calculateDifference(targetMs, roundedElapsedMs);
-    const score = calculateScore(differenceMs);
-    await repository.submitDailyBest({
-      deviceKeyHash: createHmac('sha256', secret)
-        .update(deviceKey)
-        .digest('hex'),
-      differenceMs,
-      elapsedMs: roundedElapsedMs,
-      nickname: nickname.trim(),
-      playedOn,
-      score,
-      targetMs,
-    });
-    return { differenceMs, ok: true, score, targetMs };
-  });
+      const targetMs = generateDailyTargetMs(playedOn, roundIndex as number);
+      const roundedElapsedMs = Math.round(elapsedMs);
+      const differenceMs = calculateDifference(targetMs, roundedElapsedMs);
+      const score = calculateScore(differenceMs);
+      await repository.submitDailyBest({
+        deviceKeyHash: createHmac('sha256', secret)
+          .update(deviceKey)
+          .digest('hex'),
+        differenceMs,
+        elapsedMs: roundedElapsedMs,
+        nickname: nickname.trim(),
+        playedOn,
+        score,
+        targetMs,
+      });
+      return { differenceMs, ok: true, score, targetMs };
+    },
+  );
 }
 
 function getSaoPauloDate(date: Date): string {

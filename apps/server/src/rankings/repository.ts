@@ -27,6 +27,7 @@ export interface RankingsRepository {
     periodStart: string,
     limit: number,
   ): Promise<RankingEntry[]>;
+  ping(): Promise<void>;
   submitDailyBest(input: DailyBestInput): Promise<void>;
 }
 
@@ -67,6 +68,10 @@ export function createPostgresRankingsRepository(
         position: Number(row.position),
         totalScore: Number(row.total_score),
       }));
+    },
+
+    async ping() {
+      await pool.query('select 1');
     },
 
     async submitDailyBest(input) {

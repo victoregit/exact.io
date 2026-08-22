@@ -26,6 +26,7 @@ function createRepository() {
         totalScore: 2_950,
       },
     ]),
+    ping: vi.fn(async () => undefined),
     submitDailyBest,
   };
   return { repository, submitDailyBest };
@@ -112,5 +113,43 @@ describe('ranking API', () => {
 
     expect(response.statusCode).toBe(400);
     expect(submitDailyBest).not.toHaveBeenCalled();
+  });
+
+  it('reports database readiness', async () => {
+    const { repository } = createRepository();
+    const app = buildApp({ rankingsRepository: repository });
+    apps.push(app);
+
+    const response = await app.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ database: 'ready' });
+    expect(repository.ping).toHaveBeenCalledOnce();
+  });
+
+  it('limits daily submissions per client', async () => {
+    const { repository } = createRepository();
+    const app = buildApp({
+      now: () => new Date('2026-08-22T15:00:00Z'),
+      rankingsRepository: repository,
+      rankingSecret: 'test-secret',
+    });
+    apps.push(app);
+    const request = {
+      body: {
+        deviceKey: 'device-key-with-enough-entropy',
+        elapsedMs: 7_000,
+        nickname: 'Victor',
+        playedOn: '2026-08-22',
+        roundIndex: 0,
+      },
+      method: 'POST' as const,
+      url: '/rankings/daily',
+    };
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await app.inject(request)).statusCode).toBe(200);
+    }
+    expect((await app.inject(request)).statusCode).toBe(429);
   });
 });

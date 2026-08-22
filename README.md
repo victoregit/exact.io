@@ -14,7 +14,7 @@ Uma rodada apresenta o alvo, executa uma contagem regressiva e oculta todas as r
 - Vitest para testes automatizados
 - ESLint e Prettier para qualidade de código
 
-O Solo, o Daily e a base multiplayer estão ativos. As salas usam Socket.IO e o próximo eixo de implementação é persistir rankings globais no Postgres do Supabase.
+O Solo, o Daily e a base multiplayer estão ativos. As salas usam Socket.IO e os rankings globais usam PostgreSQL gerenciado na Aiven.
 
 ## Arquitetura
 
@@ -52,6 +52,8 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 | `HOST`                | `0.0.0.0`               | Interface de rede do servidor |
 | `PORT`                | `3001`                  | Porta do servidor             |
 | `WEB_ORIGIN`          | `http://localhost:3000` | Origem permitida pelo CORS    |
+| `DATABASE_URL`        | —                       | Conexão PostgreSQL da API     |
+| `DEVICE_KEY_SECRET`   | —                       | Segredo para pseudonimização  |
 
 ## Scripts
 
@@ -90,10 +92,12 @@ No Windows PowerShell, use `Copy-Item .env.example .env` em vez de `cp` se neces
 - [x] API de ranking — gravação validada e consultas por período
 - [x] Tela de ranking — abas Diário, Semanal e Mensal
 - [x] Integração Solo → ranking — nickname local e envio automático do melhor Daily
-- [ ] Deploy Render + Supabase — variáveis, migrations e observabilidade
+- [x] Blueprint Render — serviços web/API, health check e segredos externos
+- [x] Proteção da API — rate limit e readiness do banco
+- [ ] Ativação Render + Aiven — criar banco, Blueprint e informar as URLs públicas
 - [ ] Polimento Solo contínuo — mobile e acessibilidade
 - [ ] Escala multiplayer — estado compartilhado para múltiplas instâncias
 
 ## Status atual
 
-A sessão Solo e o Daily permanecem funcionais. O multiplayer possui lobby privado em memória, Ready, turnos cronometrados, verificação, placar e modos Pontos/Eliminatório/Duplas. O schema do Supabase preserva somente o melhor resultado diário de cada jogador; os rankings semanal e mensal somam esses melhores resultados diários. Consulte `docs/ranking-architecture.md` para o desenho da implantação.
+A sessão Solo e o Daily permanecem funcionais. O multiplayer possui lobby privado em memória, Ready, turnos cronometrados, verificação, placar e modos Pontos/Eliminatório/Duplas. O PostgreSQL da Aiven preserva somente o melhor resultado diário de cada jogador; os rankings semanal e mensal somam esses melhores resultados diários. Consulte `docs/ranking-architecture.md` para o desenho da implantação.
