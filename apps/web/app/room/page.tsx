@@ -29,6 +29,7 @@ export default function RoomPage() {
     ServerToClientEvents,
     ClientToServerEvents
   > | null>(null);
+  const serverClockOffsetRef = useRef(0);
 
   useEffect(() => {
     setNickname(window.localStorage.getItem(NICKNAME_STORAGE_KEY) ?? '');
@@ -41,12 +42,30 @@ export default function RoomPage() {
       process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
     );
     socketRef.current = socket;
-    socket.on('connect', () => setConnected(true));
+    const synchronizeServerClock = () => {
+      if (!socket.connected) return;
+      const requestedAt = Date.now();
+      socket.emit(
+        SocketEvents.CONNECTION_HELLO,
+        { clientVersion: '0.1.0' },
+        (response) => {
+          const receivedAt = Date.now();
+          const serverNow = Date.parse(response.connectedAt);
+          // Approximate the server clock at the midpoint of the round trip.
+          serverClockOffsetRef.current =
+            serverNow - (requestedAt + (receivedAt - requestedAt) / 2);
+          setConnected(true);
+        },
+      );
+    };
+    socket.on('connect', synchronizeServerClock);
     socket.on('disconnect', () => setConnected(false));
     socket.on('connect_error', () => setConnected(false));
     socket.on(SocketEvents.ROOM_STATE, setRoom);
+    const clockSyncInterval = window.setInterval(synchronizeServerClock, 30_000);
 
     return () => {
+      window.clearInterval(clockSyncInterval);
       socket.close();
       socketRef.current = null;
     };
@@ -54,8 +73,9 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (room?.match?.phase !== 'countdown') return;
-    setClockNow(Date.now());
-    const interval = window.setInterval(() => setClockNow(Date.now()), 100);
+    const synchronizedNow = () => Date.now() + serverClockOffsetRef.current;
+    setClockNow(synchronizedNow());
+    const interval = window.setInterval(() => setClockNow(synchronizedNow()), 100);
     return () => window.clearInterval(interval);
   }, [room?.match?.countdownEndsAt, room?.match?.phase]);
 
