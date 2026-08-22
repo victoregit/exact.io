@@ -5,8 +5,7 @@ services:
     plan: free
     branch: main
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @exact-io/shared build && pnpm --filter @exact-io/server build
-    preDeployCommand: pnpm --filter @exact-io/server migrate
-    startCommand: pnpm --filter @exact-io/server start
+    startCommand: pnpm --filter @exact-io/server migrate && pnpm --filter @exact-io/server start
     healthCheckPath: /ready
     autoDeploy: true
     envVars:
