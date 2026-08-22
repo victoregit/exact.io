@@ -1,0 +1,23 @@
+{
+  "name": "exact-io",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "predev": "pnpm --filter @exact-io/shared build",
+    "dev": "pnpm --parallel --filter @exact-io/shared --filter @exact-io/web --filter @exact-io/server dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "pretest": "pnpm --filter @exact-io/shared build",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14"
+  }
+}
