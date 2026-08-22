@@ -18,6 +18,7 @@ import {
 } from '@exact-io/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 import { playSound, type SoundCue } from './audio';
 import { submitDailyRanking } from './ranking-client';
@@ -37,7 +38,7 @@ interface RoundResult {
 
 const COUNTDOWN_FROM = 3;
 const TARGET_PREVIEW_MS = 2_500;
-const TOTAL_ROUNDS = 5;
+const TOTAL_ROUNDS = 3;
 const RECORDS_STORAGE_KEY = 'exact:solo-records:v2';
 const SOUND_STORAGE_KEY = 'exact:sound-enabled:v1';
 const DAILY_STORAGE_KEY = 'exact:daily-result:v1';
@@ -72,6 +73,7 @@ export default function HomePage() {
   const [records, setRecords] = useState<SoloRecords>(EMPTY_SOLO_RECORDS);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [dailyResult, setDailyResult] = useState<DailyResult | null>(null);
+  const [dailyResultLoaded, setDailyResultLoaded] = useState(false);
   const [nickname, setNickname] = useState('');
   const [rankingStatus, setRankingStatus] = useState<
     'error' | 'idle' | 'saved' | 'sending'
@@ -108,6 +110,8 @@ export default function HomePage() {
       setDailyResult(stored?.date === getSaoPauloDateKey() ? stored : null);
     } catch {
       setDailyResult(null);
+    } finally {
+      setDailyResultLoaded(true);
     }
   }, []);
 
@@ -157,6 +161,7 @@ export default function HomePage() {
   }, []);
 
   const beginSession = useCallback(() => {
+    if (dailyResult) return;
     const normalizedNickname = nickname.trim();
     if (normalizedNickname.length < 2 || normalizedNickname.length > 16) return;
     try {
@@ -174,7 +179,7 @@ export default function HomePage() {
     sessionSavedRef.current = false;
     setRoundResults([]);
     beginRound();
-  }, [beginRound, nickname, soundEnabled]);
+  }, [beginRound, dailyResult, nickname, soundEnabled]);
 
   const stopRound = useCallback(() => {
     if (stoppedRef.current || startedAtRef.current === null) return;
@@ -309,11 +314,16 @@ export default function HomePage() {
       <section className="relative flex min-h-[640px] w-full max-w-xl flex-col rounded-[2rem] border border-white/10 bg-zinc-950/70 p-6 shadow-2xl shadow-black/40 backdrop-blur sm:min-h-[680px] sm:p-10">
         <header className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold tracking-[0.35em] text-emerald-400">
-              EXACT
-            </p>
+            <Image
+              alt="EXACT"
+              className="h-auto w-24"
+              height={477}
+              priority
+              src="/exact-logo-final.png"
+              width={1281}
+            />
             <p className="mt-1 text-[10px] tracking-[0.22em] text-zinc-600">
-              DAILY · SINGLE PLAYER
+              DESAFIO DIÁRIO
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -357,53 +367,72 @@ export default function HomePage() {
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           {gameState === 'idle' && (
             <>
-              <p className="text-sm font-semibold tracking-[0.3em] text-emerald-400">
-                FEEL THE TIME
-              </p>
-              <h1 className="mt-5 text-6xl font-black tracking-tighter text-white sm:text-8xl">
-                EXACT
+              <h1 className="w-full max-w-md">
+                <Image
+                  alt="EXACT"
+                  className="h-auto w-full"
+                  height={477}
+                  priority
+                  src="/exact-logo-final.png"
+                  width={1281}
+                />
               </h1>
-              <p className="mt-6 max-w-sm text-balance leading-7 text-zinc-400">
-                Memorize o alvo. Quando o relógio desaparecer, pare no instante
-                exato.
-              </p>
-              <input
-                aria-label="Seu nickname"
-                className="mt-8 w-full max-w-sm rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-white outline-none transition placeholder:text-zinc-700 focus:border-emerald-400/50"
-                maxLength={16}
-                onChange={(event) => setNickname(event.target.value)}
-                placeholder="SEU NICKNAME"
-                value={nickname}
-              />
-              <button
-                className="mt-4 w-full max-w-sm cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-lg font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={
-                  nickname.trim().length < 2 || nickname.trim().length > 16
-                }
-                onClick={beginSession}
-                type="button"
-              >
-                INICIAR
-              </button>
-              {records.gamesPlayed > 0 && (
-                <p className="mt-5 text-xs tracking-widest text-zinc-600">
-                  RECORDE {records.highScore.toLocaleString('pt-BR')} ·{' '}
-                  {records.gamesPlayed}{' '}
-                  {records.gamesPlayed === 1 ? 'PARTIDA' : 'PARTIDAS'}
-                </p>
+              {dailyResultLoaded && dailyResult ? (
+                <div className="mt-8 w-full max-w-sm rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-6 py-6">
+                  <p className="text-xs font-black tracking-[0.24em] text-emerald-300">
+                    DESAFIO DE HOJE CONCLUÍDO
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-zinc-400">
+                    Sua melhor tentativa já está no ranking. Um novo desafio
+                    libera amanhã.
+                  </p>
+                  <p className="mt-4 font-mono text-3xl font-black text-white">
+                    {dailyResult.bestScore.toLocaleString('pt-BR')} PT
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <input
+                    aria-label="Seu nickname"
+                    className="mt-8 w-full max-w-sm rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-white outline-none transition placeholder:text-zinc-700 focus:border-emerald-400/50"
+                    maxLength={16}
+                    onChange={(event) => setNickname(event.target.value)}
+                    placeholder="SEU NICKNAME"
+                    value={nickname}
+                  />
+                  {records.gamesPlayed > 0 && (
+                    <p className="mt-5 text-xs tracking-widest text-zinc-600">
+                      RECORDE {records.highScore.toLocaleString('pt-BR')} ·{' '}
+                      {records.gamesPlayed}{' '}
+                      {records.gamesPlayed === 1 ? 'PARTIDA' : 'PARTIDAS'}
+                    </p>
+                  )}
+                  <button
+                    className="mt-4 w-full max-w-sm cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-lg font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={
+                      !dailyResultLoaded ||
+                      nickname.trim().length < 2 ||
+                      nickname.trim().length > 16
+                    }
+                    onClick={beginSession}
+                    type="button"
+                  >
+                    DESAFIO DIÁRIO
+                  </button>
+                </>
               )}
-              <div className="mt-7 flex gap-6">
+              <div className="mt-4 flex w-full max-w-sm flex-col gap-3">
                 <Link
-                  className="text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-8 py-5 text-sm font-black tracking-[0.2em] text-white transition hover:border-emerald-400/30 hover:bg-white/[0.06]"
+                  href="/room"
+                >
+                  MULTIPLAYER
+                </Link>
+                <Link
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-8 py-5 text-sm font-black tracking-[0.2em] text-white transition hover:border-emerald-400/30 hover:bg-white/[0.06]"
                   href="/ranking"
                 >
                   RANKING
-                </Link>
-                <Link
-                  className="text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
-                  href="/room"
-                >
-                  SALA PRIVADA
                 </Link>
               </div>
             </>
@@ -426,12 +455,7 @@ export default function HomePage() {
               <p className="text-xs font-bold tracking-[0.38em] text-zinc-500">
                 PREPARE-SE
               </p>
-              <p
-                key={countdown}
-                className="countdown-pop mt-5 text-9xl font-black text-white"
-              >
-                {countdown}
-              </p>
+              <CountdownRing key="solo-countdown" />
             </div>
           )}
 
@@ -525,7 +549,7 @@ export default function HomePage() {
                 {summary.bestScore.toLocaleString('pt-BR')}
               </p>
               <p className="mt-2 text-[10px] tracking-[0.3em] text-zinc-600">
-                MELHOR RESULTADO DE 5 · MÁXIMO 1.000
+                MELHOR RESULTADO DE 3 · MÁXIMO 1.000
               </p>
 
               {dailyResult && (
@@ -622,13 +646,9 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <button
-                className="mt-8 w-full cursor-pointer rounded-2xl bg-emerald-400 px-8 py-5 text-sm font-black tracking-[0.2em] text-zinc-950 transition hover:bg-emerald-300 active:scale-[0.98]"
-                onClick={beginSession}
-                type="button"
-              >
-                NOVA PARTIDA
-              </button>
+              <p className="mt-8 rounded-2xl border border-white/10 px-5 py-4 text-xs font-bold tracking-[0.16em] text-zinc-500">
+                DESAFIO DIÁRIO ENCERRADO · VOLTE AMANHÃ
+              </p>
               <Link
                 className="mt-6 inline-block text-xs font-bold tracking-[0.2em] text-zinc-500 transition hover:text-emerald-400"
                 href="/ranking"
@@ -639,13 +659,40 @@ export default function HomePage() {
           )}
         </div>
 
-        <footer className="mt-8 text-center text-[10px] font-semibold tracking-[0.2em] text-zinc-700">
-          {gameState === 'playing'
-            ? 'TOQUE NO BOTÃO OU PRESSIONE SPACE'
-            : 'PRECISÃO EM MILISSEGUNDOS'}
-        </footer>
+        {gameState === 'playing' && (
+          <footer className="mt-8 text-center text-[10px] font-semibold tracking-[0.2em] text-zinc-700">
+            TOQUE NO BOTÃO OU PRESSIONE SPACE
+          </footer>
+        )}
       </section>
     </main>
+  );
+}
+
+function CountdownRing() {
+  return (
+    <div className="relative mx-auto mt-7 h-32 w-32" aria-hidden="true">
+      <svg className="h-full w-full -rotate-90" viewBox="0 0 120 120">
+        <circle
+          className="fill-none stroke-white/10"
+          cx="60"
+          cy="60"
+          r="52"
+          strokeWidth="8"
+        />
+        <circle
+          className="countdown-ring fill-none stroke-emerald-400"
+          cx="60"
+          cy="60"
+          r="52"
+          strokeLinecap="round"
+          strokeWidth="8"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-2xl font-black text-white">
+        GO
+      </span>
+    </div>
   );
 }
 

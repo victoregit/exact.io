@@ -8,6 +8,7 @@ import {
   type ServerToClientEvents,
 } from '@exact-io/shared';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
@@ -57,6 +58,40 @@ export default function RoomPage() {
     const interval = window.setInterval(() => setClockNow(Date.now()), 100);
     return () => window.clearInterval(interval);
   }, [room?.match?.countdownEndsAt, room?.match?.phase]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      const activePlayer = room?.players.find(
+        (player) => player.id === room.match?.activePlayerId,
+      );
+      const isMyTurn =
+        activePlayer?.nickname.toLocaleLowerCase() ===
+        nickname.trim().toLocaleLowerCase();
+      if (!isMyTurn || !room?.match) return;
+
+      if (room.match.phase === 'ready') {
+        event.preventDefault();
+        runTurnAction(SocketEvents.ROUND_START);
+      } else if (room.match.phase === 'timing') {
+        event.preventDefault();
+        runTurnAction(SocketEvents.ROUND_STOP);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nickname, room]);
 
   function rememberNickname() {
     try {
@@ -191,10 +226,21 @@ export default function RoomPage() {
       <section className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-zinc-950/70 p-6 shadow-2xl sm:p-10">
         <header className="flex items-center justify-between">
           <Link
-            className="text-xs font-bold tracking-[0.35em] text-emerald-400"
+            aria-label="Voltar para o início"
+            className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] font-black tracking-[0.18em] text-zinc-400 transition hover:border-emerald-400/40 hover:bg-emerald-400/10 hover:text-emerald-300 active:scale-95"
             href="/"
+            title="Voltar para o início"
           >
-            EXACT
+            <span className="text-base leading-none transition-transform group-hover:-translate-x-0.5">
+              ←
+            </span>
+            <Image
+              alt="EXACT"
+              className="h-auto w-16"
+              height={477}
+              src="/exact-logo-final.png"
+              width={1281}
+            />
           </Link>
           <span className="inline-flex items-center gap-2 text-[10px] font-bold tracking-widest text-zinc-500">
             <span
@@ -207,7 +253,7 @@ export default function RoomPage() {
         {!room ? (
           <div className="mt-10">
             <p className="text-xs font-bold tracking-[0.3em] text-zinc-500">
-              SALA PRIVADA
+              MULTIPLAYER
             </p>
             <h1 className="mt-3 text-4xl font-black tracking-tight text-white">
               Jogue com amigos.
@@ -248,7 +294,7 @@ export default function RoomPage() {
               <span className="h-px flex-1 bg-white/10" />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
               <OptionButton
                 active={mode === 'points'}
                 label="PONTOS"
@@ -346,8 +392,9 @@ export default function RoomPage() {
                 {room.players.length}/{room.maxPlayers} JOGADORES
               </span>
             </div>
-            <div className="mt-3 space-y-2">
-              {room.players.map((player) => (
+            {!room.match && (
+              <div className="mt-3 space-y-2">
+                {room.players.map((player) => (
                 <div
                   className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-4"
                   key={player.id}
@@ -379,14 +426,45 @@ export default function RoomPage() {
                       .join(' · ')}
                   </span>
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {notice && (
               <p className="mt-5 text-sm text-emerald-400">{notice}</p>
             )}
             {room.match ? (
               <div className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-6">
+                <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {room.players.map((player) => {
+                    const isActive =
+                      player.id === room.match?.activePlayerId &&
+                      room.match.phase !== 'result';
+                    return (
+                      <div
+                        className={`min-w-0 rounded-xl border px-2 py-3 transition ${
+                          isActive
+                            ? 'border-emerald-400/60 bg-emerald-400/10 shadow-[0_0_18px_rgba(52,211,153,0.12)]'
+                            : 'border-white/[0.08] bg-black/20'
+                        }`}
+                        key={player.id}
+                      >
+                        <p className="text-[9px] font-black tracking-widest text-zinc-600">
+                          {player.slot ?? `#${player.order}`}
+                          {player.isHost ? ' · HOST' : ''}
+                        </p>
+                        <p className="mt-1 truncate text-xs font-black text-white">
+                          {player.nickname}
+                        </p>
+                        <p
+                          className={`mt-1 font-mono text-[10px] font-bold ${isActive ? 'text-emerald-300' : 'text-zinc-500'}`}
+                        >
+                          {isActive ? 'SUA VEZ' : `${player.score} PT`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
                 {room.mode === 'duos' && (
                   <div className="mb-6 grid grid-cols-2 gap-3">
                     {(['AB', 'CD'] as const).map((team) => (
@@ -451,21 +529,21 @@ export default function RoomPage() {
                       {room.match.phase === 'timing' ? 'PARAR' : 'INICIAR'}
                     </button>
                   )}
+                {(room.match.phase === 'ready' ||
+                  room.match.phase === 'timing') && (
+                  <p className="mt-3 text-[9px] font-bold tracking-[0.18em] text-zinc-600">
+                    USE O BOTÃO OU PRESSIONE SPACE
+                  </p>
+                )}
                 {room.match.phase === 'countdown' && (
                   <div className="mt-6 rounded-2xl bg-white/[0.04] py-6">
                     <p className="text-[10px] font-bold tracking-[0.3em] text-zinc-500">
                       PREPARE-SE
                     </p>
-                    <p className="mt-2 font-mono text-6xl font-black text-emerald-400">
-                      {Math.max(
-                        1,
-                        Math.ceil(
-                          ((room.match.countdownEndsAt ?? clockNow) -
-                            clockNow) /
-                            1000,
-                        ),
-                      )}
-                    </p>
+                    <RoomCountdownRing
+                      endsAt={room.match.countdownEndsAt ?? clockNow}
+                      now={clockNow}
+                    />
                   </div>
                 )}
                 {room.match.phase === 'timing' && (
@@ -632,6 +710,38 @@ export default function RoomPage() {
   );
 }
 
+function RoomCountdownRing({ endsAt, now }: { endsAt: number; now: number }) {
+  const circumference = 327;
+  const progress = Math.min(1, Math.max(0, 1 - (endsAt - now) / 3_000));
+
+  return (
+    <div className="relative mx-auto mt-5 h-28 w-28" aria-hidden="true">
+      <svg className="h-full w-full -rotate-90" viewBox="0 0 120 120">
+        <circle
+          className="fill-none stroke-white/10"
+          cx="60"
+          cy="60"
+          r="52"
+          strokeWidth="8"
+        />
+        <circle
+          className="fill-none stroke-emerald-400 transition-[stroke-dashoffset] duration-100 ease-linear"
+          cx="60"
+          cy="60"
+          r="52"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - progress)}
+          strokeLinecap="round"
+          strokeWidth="8"
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-sm font-black tracking-[0.18em] text-white">
+        READY
+      </span>
+    </div>
+  );
+}
+
 function OptionButton({
   active,
   label,
@@ -643,7 +753,7 @@ function OptionButton({
 }) {
   return (
     <button
-      className={`cursor-pointer rounded-xl border px-3 py-4 text-xs font-black tracking-widest transition ${active ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-zinc-500 hover:bg-white/5'}`}
+      className={`min-w-0 cursor-pointer overflow-hidden rounded-xl border px-1 py-4 text-[8px] font-black tracking-[0.04em] transition min-[390px]:text-[9px] min-[390px]:tracking-[0.08em] sm:px-3 sm:text-xs sm:tracking-widest ${active ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-zinc-500 hover:bg-white/5'}`}
       onClick={onClick}
       type="button"
     >

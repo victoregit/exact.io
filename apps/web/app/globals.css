@@ -28,6 +28,22 @@ body {
   animation: countdown-pop 240ms ease-out;
 }
 
+@keyframes countdown-ring-fill {
+  from {
+    stroke-dashoffset: 327;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.countdown-ring {
+  stroke-dasharray: 327;
+  stroke-dashoffset: 327;
+  animation: countdown-ring-fill 3s linear forwards;
+  filter: drop-shadow(0 0 8px rgb(52 211 153 / 0.45));
+}
+
 .stop-button {
   touch-action: manipulation;
   user-select: none;
