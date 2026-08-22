@@ -685,6 +685,8 @@ export default function RoomPage() {
                       <p className="mt-2 text-[10px] font-bold tracking-widest text-zinc-500">
                         {room.match.resolution === 'limit'
                           ? 'LIMITE DE 2× ATINGIDO'
+                          : room.match.resolution === 'closest'
+                            ? 'MAIS PRÓXIMO DO ALVO'
                           : room.match.resolution === 'challenge-correct'
                             ? 'DESAFIO CORRETO'
                             : 'DESAFIO INCORRETO'}
