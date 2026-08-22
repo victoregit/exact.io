@@ -74,7 +74,7 @@ export function registerRankingRoutes(
         playedOn !== today ||
         !Number.isInteger(roundIndex) ||
         (roundIndex ?? -1) < 0 ||
-        (roundIndex ?? 5) > 4 ||
+        (roundIndex ?? 3) > 2 ||
         typeof elapsedMs !== 'number' ||
         !Number.isFinite(elapsedMs) ||
         elapsedMs < 0 ||
