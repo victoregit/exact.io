@@ -3,7 +3,7 @@ services:
     name: exact-api
     runtime: node
     plan: free
-    branch: develop
+    branch: main
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @exact-io/shared build && pnpm --filter @exact-io/server build
     preDeployCommand: pnpm --filter @exact-io/server migrate
     startCommand: pnpm --filter @exact-io/server start
@@ -27,7 +27,7 @@ services:
     name: exact-web
     runtime: node
     plan: free
-    branch: develop
+    branch: main
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @exact-io/shared build && pnpm --filter @exact-io/web build
     startCommand: pnpm --filter @exact-io/web start
     healthCheckPath: /
