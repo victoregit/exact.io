@@ -247,9 +247,7 @@ export class RoomManager {
     if (room.mode === 'elimination') this.shuffleActiveTurnOrder(room);
     const firstPlayer = room.players
       .filter((candidate) => !candidate.isEliminated)
-      .sort(
-      (left, right) => left.turnOrder - right.turnOrder,
-      )[0];
+      .sort((left, right) => left.turnOrder - right.turnOrder)[0];
     room.match = {
       activePlayerId: firstPlayer.id,
       accumulatedMs: 0,
@@ -402,13 +400,19 @@ export class RoomManager {
       (room.mode !== 'elimination' && room.mode !== 'duos') ||
       match.previousPlayerId === null
     ) {
-      throw new RoomError('CHALLENGE_UNAVAILABLE', 'Não há jogador para desafiar.');
+      throw new RoomError(
+        'CHALLENGE_UNAVAILABLE',
+        'Não há jogador para desafiar.',
+      );
     }
     if (match.phase !== 'ready') {
       throw new RoomError('CHALLENGE_UNAVAILABLE', 'A rodada já terminou.');
     }
     if (player.id === match.previousPlayerId) {
-      throw new RoomError('INVALID_CHALLENGE', 'Você não pode desafiar a si mesmo.');
+      throw new RoomError(
+        'INVALID_CHALLENGE',
+        'Você não pode desafiar a si mesmo.',
+      );
     }
     const previousPlayer = room.players.find(
       (candidate) => candidate.id === match.previousPlayerId,
@@ -420,7 +424,10 @@ export class RoomManager {
       );
     }
     if (match.challengedByIds.includes(player.id)) {
-      throw new RoomError('CHALLENGE_ALREADY_USED', 'Você já desafiou nesta rodada.');
+      throw new RoomError(
+        'CHALLENGE_ALREADY_USED',
+        'Você já desafiou nesta rodada.',
+      );
     }
 
     match.challengedByIds.push(player.id);
@@ -519,7 +526,8 @@ export class RoomManager {
       const currentIndex = activePlayers.findIndex(
         (candidate) => candidate.id === playerId,
       );
-      const nextPlayer = activePlayers[(currentIndex + 1) % activePlayers.length];
+      const nextPlayer =
+        activePlayers[(currentIndex + 1) % activePlayers.length];
       match.activePlayerId = nextPlayer.id;
       match.phase = 'ready';
       match.countdownEndsAt = null;
@@ -563,7 +571,9 @@ export class RoomManager {
       ),
     ];
     match.winnerIds.forEach((winnerId) => {
-      const winner = room.players.find((candidate) => candidate.id === winnerId);
+      const winner = room.players.find(
+        (candidate) => candidate.id === winnerId,
+      );
       if (winner) winner.score += 1;
     });
     match.countdownEndsAt = null;
@@ -591,7 +601,9 @@ export class RoomManager {
     room.status = 'results';
 
     if (room.mode === 'points') {
-      const winner = room.players.find((candidate) => candidate.id === winnerId);
+      const winner = room.players.find(
+        (candidate) => candidate.id === winnerId,
+      );
       if (winner) winner.score += 1;
       this.finishPointsChampionship(room);
       return;
@@ -600,7 +612,9 @@ export class RoomManager {
     const loser = room.players.find((candidate) => candidate.id === loserId);
     if (loser?.shieldActive) loser.shieldActive = false;
     else if (loser) loser.isEliminated = true;
-    const survivors = room.players.filter((candidate) => !candidate.isEliminated);
+    const survivors = room.players.filter(
+      (candidate) => !candidate.isEliminated,
+    );
     if (survivors.length === 1) {
       match.championId = survivors[0].id;
       room.status = 'finished';

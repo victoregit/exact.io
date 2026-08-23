@@ -62,7 +62,10 @@ export default function RoomPage() {
     socket.on('disconnect', () => setConnected(false));
     socket.on('connect_error', () => setConnected(false));
     socket.on(SocketEvents.ROOM_STATE, setRoom);
-    const clockSyncInterval = window.setInterval(synchronizeServerClock, 30_000);
+    const clockSyncInterval = window.setInterval(
+      synchronizeServerClock,
+      30_000,
+    );
 
     return () => {
       window.clearInterval(clockSyncInterval);
@@ -75,7 +78,10 @@ export default function RoomPage() {
     if (room?.match?.phase !== 'countdown') return;
     const synchronizedNow = () => Date.now() + serverClockOffsetRef.current;
     setClockNow(synchronizedNow());
-    const interval = window.setInterval(() => setClockNow(synchronizedNow()), 100);
+    const interval = window.setInterval(
+      () => setClockNow(synchronizedNow()),
+      100,
+    );
     return () => window.clearInterval(interval);
   }, [room?.match?.countdownEndsAt, room?.match?.phase]);
 
@@ -102,9 +108,7 @@ export default function RoomPage() {
       );
       const isMyTurn =
         room?.mode === 'points'
-          ? !room.match?.attempts.some(
-              (attempt) => attempt.playerId === me?.id,
-            )
+          ? !room.match?.attempts.some((attempt) => attempt.playerId === me?.id)
           : activePlayer?.id === me?.id;
       if (!isMyTurn || !room?.match) return;
 
@@ -428,37 +432,39 @@ export default function RoomPage() {
             {!room.match && (
               <div className="mt-3 space-y-2">
                 {room.players.map((player) => (
-                <div
-                  className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-4"
-                  key={player.id}
-                >
-                  <span className="font-mono text-xs text-zinc-600">
-                    {player.slot ?? `#${player.order}`}
-                  </span>
-                  <span className="font-bold text-white">
-                    {player.nickname}
-                  </span>
-                  <span className="text-xs text-zinc-500">
-                    {[
-                      player.isHost ? 'HOST' : null,
-                      room.match ? `${player.score} PT` : null,
-                      player.team ? `TIME ${player.team === 'AB' ? '1' : '2'}` : null,
-                      player.team ? `T${player.turnOrder}` : null,
-                      !player.team &&
-                      room.mode === 'elimination' &&
-                      player.shieldActive
-                        ? '🛡️'
-                        : null,
-                      !player.isHost
-                        ? player.isReady
-                          ? 'READY'
-                          : 'AGUARDANDO'
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                </div>
+                  <div
+                    className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-4"
+                    key={player.id}
+                  >
+                    <span className="font-mono text-xs text-zinc-600">
+                      {player.slot ?? `#${player.order}`}
+                    </span>
+                    <span className="font-bold text-white">
+                      {player.nickname}
+                    </span>
+                    <span className="text-xs text-zinc-500">
+                      {[
+                        player.isHost ? 'HOST' : null,
+                        room.match ? `${player.score} PT` : null,
+                        player.team
+                          ? `TIME ${player.team === 'AB' ? '1' : '2'}`
+                          : null,
+                        player.team ? `T${player.turnOrder}` : null,
+                        !player.team &&
+                        room.mode === 'elimination' &&
+                        player.shieldActive
+                          ? '🛡️'
+                          : null,
+                        !player.isHost
+                          ? player.isReady
+                            ? 'READY'
+                            : 'AGUARDANDO'
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </div>
                 ))}
               </div>
             )}
@@ -472,46 +478,46 @@ export default function RoomPage() {
                   {[...room.players]
                     .sort((left, right) => left.turnOrder - right.turnOrder)
                     .map((player) => {
-                    const isActive =
-                      player.id === room.match?.activePlayerId &&
-                      room.match.phase !== 'result';
-                    const isCurrentUser =
-                      player.nickname.toLocaleLowerCase() ===
-                      nickname.trim().toLocaleLowerCase();
-                    return (
-                      <div
-                        className={`min-w-0 rounded-xl border px-2 py-3 transition ${
-                          isActive
-                            ? 'border-emerald-400/60 bg-emerald-400/10 shadow-[0_0_18px_rgba(52,211,153,0.12)]'
-                            : 'border-white/[0.08] bg-black/20'
-                        }`}
-                        key={player.id}
-                      >
-                        <p className="text-[9px] font-black tracking-widest text-zinc-600">
-                          {player.slot ?? `#${player.turnOrder}`}
-                          {player.isHost ? ' · HOST' : ''}
-                        </p>
-                        <p className="mt-1 truncate text-xs font-black text-white">
-                          {player.nickname}
-                        </p>
-                        <p
-                          className={`mt-1 font-mono text-[10px] font-bold ${isActive ? 'text-emerald-300' : 'text-zinc-500'}`}
+                      const isActive =
+                        player.id === room.match?.activePlayerId &&
+                        room.match.phase !== 'result';
+                      const isCurrentUser =
+                        player.nickname.toLocaleLowerCase() ===
+                        nickname.trim().toLocaleLowerCase();
+                      return (
+                        <div
+                          className={`min-w-0 rounded-xl border px-2 py-3 transition ${
+                            isActive
+                              ? 'border-emerald-400/60 bg-emerald-400/10 shadow-[0_0_18px_rgba(52,211,153,0.12)]'
+                              : 'border-white/[0.08] bg-black/20'
+                          }`}
+                          key={player.id}
                         >
-                          {player.isEliminated
-                            ? 'ELIMINADO'
-                            : isActive && isCurrentUser
-                              ? 'SUA VEZ'
-                              : isActive
-                                ? 'JOGANDO'
-                              : room.mode === 'elimination'
-                                ? player.shieldActive
-                                  ? '🛡️ PROTEGIDO'
-                                  : 'SEM PROTEÇÃO'
-                                : `${player.score} PT`}
-                        </p>
-                      </div>
-                    );
-                  })}
+                          <p className="text-[9px] font-black tracking-widest text-zinc-600">
+                            {player.slot ?? `#${player.turnOrder}`}
+                            {player.isHost ? ' · HOST' : ''}
+                          </p>
+                          <p className="mt-1 truncate text-xs font-black text-white">
+                            {player.nickname}
+                          </p>
+                          <p
+                            className={`mt-1 font-mono text-[10px] font-bold ${isActive ? 'text-emerald-300' : 'text-zinc-500'}`}
+                          >
+                            {player.isEliminated
+                              ? 'ELIMINADO'
+                              : isActive && isCurrentUser
+                                ? 'SUA VEZ'
+                                : isActive
+                                  ? 'JOGANDO'
+                                  : room.mode === 'elimination'
+                                    ? player.shieldActive
+                                      ? '🛡️ PROTEGIDO'
+                                      : 'SEM PROTEÇÃO'
+                                    : `${player.score} PT`}
+                          </p>
+                        </div>
+                      );
+                    })}
                 </div>
                 {room.mode === 'duos' && (
                   <div className="mb-6 grid grid-cols-2 gap-3">
@@ -556,8 +562,8 @@ export default function RoomPage() {
                   {room.mode === 'points'
                     ? `${room.match.attempts.length}/${room.players.length} ENVIARAM`
                     : room.mode === 'duos'
-                    ? `${room.match.attempts.length}/${room.players.length} JOGARAM`
-                    : `${room.match.attempts.length} PASSAGENS`}
+                      ? `${room.match.attempts.length}/${room.players.length} JOGARAM`
+                      : `${room.match.attempts.length} PASSAGENS`}
                 </p>
                 <p className="mt-3 text-xs text-zinc-600">
                   {room.mode === 'points' ? (
@@ -589,31 +595,34 @@ export default function RoomPage() {
                     room.match.phase === 'timing') &&
                     room.mode !== 'points' &&
                     room.players
-                    .find((player) => player.id === room.match?.activePlayerId)
-                    ?.nickname.toLocaleLowerCase() ===
-                    nickname.trim().toLocaleLowerCase())) && (
-                    <button
-                      className={`mt-6 w-full cursor-pointer rounded-2xl px-6 py-5 text-sm font-black tracking-[0.2em] transition ${
-                        room.match.phase === 'timing'
-                          ? 'bg-rose-500 text-white hover:bg-rose-400'
-                          : 'bg-emerald-400 text-zinc-950 hover:bg-emerald-300'
-                      }`}
-                      onClick={() =>
-                        runTurnAction(
-                          room.match?.phase === 'timing'
-                            ? SocketEvents.ROUND_STOP
-                            : SocketEvents.ROUND_START,
-                        )
-                      }
-                      type="button"
-                    >
-                      {room.match.phase === 'timing' && room.mode === 'elimination'
-                        ? 'PASSAR'
-                        : room.match.phase === 'timing'
-                          ? 'PARAR'
-                          : 'INICIAR'}
-                    </button>
-                  )}
+                      .find(
+                        (player) => player.id === room.match?.activePlayerId,
+                      )
+                      ?.nickname.toLocaleLowerCase() ===
+                      nickname.trim().toLocaleLowerCase())) && (
+                  <button
+                    className={`mt-6 w-full cursor-pointer rounded-2xl px-6 py-5 text-sm font-black tracking-[0.2em] transition ${
+                      room.match.phase === 'timing'
+                        ? 'bg-rose-500 text-white hover:bg-rose-400'
+                        : 'bg-emerald-400 text-zinc-950 hover:bg-emerald-300'
+                    }`}
+                    onClick={() =>
+                      runTurnAction(
+                        room.match?.phase === 'timing'
+                          ? SocketEvents.ROUND_STOP
+                          : SocketEvents.ROUND_START,
+                      )
+                    }
+                    type="button"
+                  >
+                    {room.match.phase === 'timing' &&
+                    room.mode === 'elimination'
+                      ? 'PASSAR'
+                      : room.match.phase === 'timing'
+                        ? 'PARAR'
+                        : 'INICIAR'}
+                  </button>
+                )}
                 {(room.mode === 'elimination' || room.mode === 'duos') &&
                   room.match.previousPlayerId &&
                   room.match.phase === 'ready' &&
@@ -646,12 +655,15 @@ export default function RoomPage() {
                       }
                       type="button"
                     >
-                      {room.mode === 'duos' && room.match.challengedByIds.length > 0
+                      {room.mode === 'duos' &&
+                      room.match.challengedByIds.length > 0
                         ? 'CONFIRMAR DESAFIO'
-                        : `DESAFIAR ${room.players.find(
-                            (player) =>
-                              player.id === room.match?.previousPlayerId,
-                          )?.nickname ?? 'JOGADOR'}`}
+                        : `DESAFIAR ${
+                            room.players.find(
+                              (player) =>
+                                player.id === room.match?.previousPlayerId,
+                            )?.nickname ?? 'JOGADOR'
+                          }`}
                     </button>
                   )}
                 {room.mode === 'duos' &&
@@ -729,9 +741,9 @@ export default function RoomPage() {
                           ? 'LIMITE DE 2× ATINGIDO'
                           : room.match.resolution === 'closest'
                             ? 'MAIS PRÓXIMO DO ALVO'
-                          : room.match.resolution === 'challenge-correct'
-                            ? 'DESAFIO CORRETO'
-                            : 'DESAFIO INCORRETO'}
+                            : room.match.resolution === 'challenge-correct'
+                              ? 'DESAFIO CORRETO'
+                              : 'DESAFIO INCORRETO'}
                       </p>
                     )}
                     <div className="mt-4 space-y-2 text-left text-xs text-zinc-400">

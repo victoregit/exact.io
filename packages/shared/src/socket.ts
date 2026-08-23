@@ -60,11 +60,7 @@ export interface RoomMatchSnapshot {
   phase: 'countdown' | 'ready' | 'result' | 'timing' | 'verification';
   previousPlayerId: string | null;
   resolution:
-    | 'challenge-correct'
-    | 'challenge-wrong'
-    | 'closest'
-    | 'limit'
-    | null;
+    'challenge-correct' | 'challenge-wrong' | 'closest' | 'limit' | null;
   targetMs: number;
   totalRounds: number;
   verifiedPlayerIds: string[];
